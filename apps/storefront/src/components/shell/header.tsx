@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Menu, MapPin, Search as SearchIcon, ShoppingBag, X } from 'lucide-react';
+import { Menu, MapPin, Search as SearchIcon, ShoppingBag, User, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useCart } from '@/lib/cart-context';
+import { useCustomer } from '@/lib/customer-context';
 import { env } from '@/lib/env';
 import { usePincode } from '@/lib/pincode-context';
 import { cn } from '@/lib/utils';
@@ -29,7 +30,10 @@ interface HeaderProps {
 export function Header({ navCategories, onChangePincode }: HeaderProps) {
   const { pincode } = usePincode();
   const { totalQuantity } = useCart();
+  const { customer } = useCustomer();
   const [navOpen, setNavOpen] = React.useState(false);
+  const accountHref = customer ? '/account' : '/account/login';
+  const accountLabel = customer ? 'Account' : 'Sign in';
 
   return (
     <header className="sticky top-0 z-30 border-b border-ink-100 bg-bone/90 backdrop-blur-md">
@@ -70,6 +74,13 @@ export function Header({ navCategories, onChangePincode }: HeaderProps) {
             aria-label="Search"
           >
             <SearchIcon className="h-5 w-5" />
+          </Link>
+          <Link
+            href={accountHref}
+            className="flex h-10 w-10 items-center justify-center rounded-md text-ink-900"
+            aria-label={accountLabel}
+          >
+            <User className="h-5 w-5" />
           </Link>
           <Link
             href="/cart"
@@ -124,6 +135,14 @@ export function Header({ navCategories, onChangePincode }: HeaderProps) {
             aria-label="Search"
           >
             <SearchIcon className="h-4 w-4" />
+          </Link>
+          <Link
+            href={accountHref}
+            className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] text-ink-900 hover:bg-ink-50"
+            aria-label={accountLabel}
+          >
+            <User className="h-4 w-4" />
+            <span className="hidden lg:inline">{accountLabel}</span>
           </Link>
           <Link
             href="/cart"

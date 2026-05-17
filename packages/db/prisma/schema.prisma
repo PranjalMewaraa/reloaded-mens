@@ -28,6 +28,7 @@ model AdminUser {
   updatedAt     DateTime  @updatedAt
 
   auditEvents AuditEvent[]
+  leads       Lead[]
 
   @@index([email])
 }
@@ -71,12 +72,17 @@ model Customer {
   marketingConsentSmsAt      DateTime?
   marketingConsentEmail      Boolean   @default(false)
   marketingConsentEmailAt    DateTime?
+  // Sprint 8 — bumped on every successful OTP login so refresh tokens issued
+  // before that point are invalidated. Lets an admin "log out everywhere" in
+  // Sprint 12 by bumping this field.
+  sessionVersion             Int       @default(0)
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
   deletedAt                  DateTime?
 
   addresses Address[]
   orders    Order[]
+  reviews   Review[]
 
   @@index([phone])
   @@index([email])
@@ -162,6 +168,7 @@ model Product {
 
   variants          ProductVariant[]
   productCategories ProductCategory[]
+  reviews           Review[]
 
   @@index([slug])
   @@index([isActive])
@@ -339,6 +346,7 @@ model OrderItem {
   order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant         ProductVariant   @relation(fields: [variantId], references: [id], onDelete: Restrict)
   returnLineItems ReturnLineItem[]
+  review          Review?
 
   @@index([orderId])
   @@index([variantId])
@@ -586,4 +594,88 @@ model ReturnLineItem {
   @@index([returnRequestId])
   @@index([variantId])
   @@index([exchangeVariantId])
+}
+
+// =====================================================
+// CustomerOtp (Sprint 8) — pending email-OTP challenge for customer login.
+// Not a FK to Customer so spam attempts don't create stub customer rows.
+// =====================================================
+model CustomerOtp {
+  id          String    @id @default(cuid())
+  phone       String
+  codeHash    String
+  // 'email' | 'sms' (Sprint 12+). Drives delivery routing + audit context.
+  channel     String    @default("email")
+  // Where we delivered the code. Email channel = the email address; SMS later.
+  deliveredTo String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// Lead (Sprint 8) — captured from /contact form or Meta Lead Ads (Sprint 11).
+// =====================================================
+model Lead {
+  id               String    @id @default(cuid())
+  // LEAD_SOURCE enum from @repo/types: 'meta_lead_ads' | 'whatsapp' | 'website_signup' | 'manual'.
+  source           String
+  // LEAD_STATUS enum: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'.
+  status           String    @default("new")
+  name             String?
+  phone            String?
+  email            String?
+  message          String?
+  // Meta-only fields. Populated by Sprint 11 webhook handler.
+  metaFormId       String?
+  metaLeadId       String?   @unique
+  customFields     Json?
+  assignedToId     String?
+  internalNote     String?
+  contactedAt      DateTime?
+  convertedAt      DateTime?
+  convertedOrderId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  assignedTo AdminUser? @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([source])
+  @@index([phone])
+}
+
+// =====================================================
+// Review (Sprint 8) — text-only product reviews. One Review per OrderItem so
+// the verified-buyer gate is structural. Photos arrive in Phase 2.
+// =====================================================
+model Review {
+  id             String    @id @default(cuid())
+  productId      String
+  orderItemId    String    @unique
+  customerId     String?
+  // Snapshot fields survive customer deletion / phone changes.
+  authorName     String
+  rating         Int
+  title          String
+  body           String
+  // REVIEW_STATUS in @repo/types: 'pending' | 'approved' | 'rejected'.
+  status         String    @default("pending")
+  rejectedReason String?
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([productId, status])
+  @@index([status, createdAt])
 }

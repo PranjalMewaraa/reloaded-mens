@@ -41,8 +41,16 @@ export class PublicTrackingService {
 
   // -------- GET /public/tracking/:orderNumber --------
 
-  async getTracking(orderNumber: string, token: string): Promise<TrackingOrder> {
-    if (!token) throw new UnauthorizedException('Missing tracking token');
+  /**
+   * Resolves an order for tracking. Sprint 5 used token-only access; Sprint 8
+   * also accepts an authenticated customer who owns the order. If neither
+   * matches, 401.
+   */
+  async getTracking(
+    orderNumber: string,
+    token: string,
+    customerId?: string | null,
+  ): Promise<TrackingOrder> {
     const order = await prisma.order.findFirst({
       where: { orderNumber, deletedAt: null },
       include: {
@@ -51,6 +59,13 @@ export class PublicTrackingService {
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderNumber} not found`);
+
+    const ownsViaCustomer = customerId !== null && customerId !== undefined && order.customerId === customerId;
+    if (ownsViaCustomer) {
+      return shapeTracking(order);
+    }
+
+    if (!token) throw new UnauthorizedException('Missing tracking token');
     if (!order.trackingToken) {
       // Historical Sprint 4 order — token was added in Sprint 5. Customer should
       // contact support via WhatsApp.

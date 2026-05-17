@@ -7,6 +7,7 @@ import {
   type ServiceabilityResponse,
 } from '@repo/types';
 import { z } from 'zod';
+import { ReviewsService } from '../reviews/reviews.service.js';
 
 // Public-facing service. Always filters to `isActive: true` and `deletedAt: null` — the
 // admin's catalog endpoints intentionally show inactive rows; this one never does.
@@ -28,6 +29,8 @@ const ROW_SELECT = {
 
 @Injectable()
 export class PublicCatalogService {
+  constructor(private readonly reviews: ReviewsService) {}
+
   // -------- products --------
 
   async listProducts(query: PublicProductListQuery) {
@@ -97,8 +100,9 @@ export class PublicCatalogService {
       }),
     ]);
 
+    const aggregates = await this.reviews.getAggregatesByProductIds(rows.map((r) => r.id));
     return {
-      items: rows.map(toPublicCardShape),
+      items: rows.map((row) => withReviewSummary(toPublicCardShape(row), aggregates.get(row.id))),
       page: query.page,
       limit: query.limit,
       total,
@@ -137,6 +141,8 @@ export class PublicCatalogService {
     });
     if (!row) throw new NotFoundException(`Product "${slug}" not found`);
 
+    const aggregate = await this.reviews.getAggregate(row.id);
+
     return {
       id: row.id,
       slug: row.slug,
@@ -152,6 +158,8 @@ export class PublicCatalogService {
       ogImageUrl: row.ogImageUrl,
       categories: row.productCategories.map((pc) => pc.category),
       variants: row.variants,
+      averageRating: aggregate.averageRating,
+      reviewCount: aggregate.totalCount,
     };
   }
 
@@ -186,7 +194,8 @@ export class PublicCatalogService {
       },
     });
 
-    return rows.map(toPublicCardShape);
+    const aggregates = await this.reviews.getAggregatesByProductIds(rows.map((r) => r.id));
+    return rows.map((row) => withReviewSummary(toPublicCardShape(row), aggregates.get(row.id)));
   }
 
   // -------- categories --------
@@ -305,6 +314,19 @@ function toPublicCardShape<T extends {
     totalStock,
     isLowStock: totalStock > 0 && totalStock <= 5,
     isOutOfStock: totalStock <= 0,
+  };
+}
+
+interface ReviewAggregateLite {
+  averageRating: number | null;
+  totalCount: number;
+}
+
+function withReviewSummary<T>(card: T, aggregate: ReviewAggregateLite | undefined) {
+  return {
+    ...card,
+    averageRating: aggregate?.averageRating ?? null,
+    reviewCount: aggregate?.totalCount ?? 0,
   };
 }
 

@@ -83,4 +83,10 @@ export class AdminOrdersController {
     const html = await this.orders.renderLabel(id);
     res.send(html);
   }
+
+  @Post(':id/send-review-invite')
+  @HttpCode(200)
+  async sendReviewInvite(@Param('id') id: string, @User() user: AuthedUser) {
+    return this.orders.sendReviewInvite(id, { id: user.id });
+  }
 }

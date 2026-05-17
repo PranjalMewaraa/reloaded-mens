@@ -4,8 +4,10 @@ import { render } from '@react-email/render';
 import { Resend } from 'resend';
 import * as React from 'react';
 import type { OrderSnapshot } from '@repo/types';
-import type { EmailService } from './email.types.js';
+import type { EmailService, OtpEmailInput, ReviewInviteEmailInput } from './email.types.js';
 import { OrderConfirmationEmail } from './templates/order-confirmation.js';
+import { OtpEmail } from './templates/otp.js';
+import { ReviewInviteEmail } from './templates/review-invite.js';
 
 // Real transactional transport using Resend. Selected by the email module's factory when
 // RESEND_API_KEY is present; otherwise the console service is wired instead. Failures
@@ -57,6 +59,49 @@ export class ResendEmailService implements EmailService {
       }
     } catch (err) {
       this.logger.error(`sendOrderConfirmation failed: ${(err as Error).message}`);
+    }
+  }
+
+  async sendOtpEmail({ to, code, ttlMinutes }: OtpEmailInput): Promise<void> {
+    try {
+      const html = await render(
+        React.createElement(OtpEmail, { code, ttlMinutes, brandName: this.brandName }),
+      );
+      const { error } = await this.resend.emails.send({
+        from: this.from,
+        to,
+        subject: `Your ${this.brandName} sign-in code`,
+        html,
+      });
+      if (error) {
+        this.logger.error(`Resend rejected OTP email: ${error.message ?? JSON.stringify(error)}`);
+      }
+    } catch (err) {
+      this.logger.error(`sendOtpEmail failed: ${(err as Error).message}`);
+    }
+  }
+
+  async sendReviewInvite({ to, customerName, orderNumber, items }: ReviewInviteEmailInput): Promise<void> {
+    try {
+      const html = await render(
+        React.createElement(ReviewInviteEmail, {
+          customerName,
+          orderNumber,
+          items,
+          brandName: this.brandName,
+        }),
+      );
+      const { error } = await this.resend.emails.send({
+        from: this.from,
+        to,
+        subject: `How was your ${this.brandName} order ${orderNumber}?`,
+        html,
+      });
+      if (error) {
+        this.logger.error(`Resend rejected review-invite: ${error.message ?? JSON.stringify(error)}`);
+      }
+    } catch (err) {
+      this.logger.error(`sendReviewInvite failed: ${(err as Error).message}`);
     }
   }
 }

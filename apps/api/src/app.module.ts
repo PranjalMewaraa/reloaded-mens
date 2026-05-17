@@ -20,6 +20,10 @@ import { RefundsModule } from './refunds/refunds.module.js';
 import { PublicTrackingModule } from './public-tracking/public-tracking.module.js';
 import { ReturnsModule } from './returns/returns.module.js';
 import { PromotionsModule } from './promotions/promotions.module.js';
+import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
+import { CustomerOrdersModule } from './customer-orders/customer-orders.module.js';
+import { LeadsModule } from './leads/leads.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 
 @Module({
   imports: [
@@ -52,6 +56,10 @@ import { PromotionsModule } from './promotions/promotions.module.js';
     RefundsModule,
     ReturnsModule,
     PromotionsModule,
+    CustomerAuthModule,
+    CustomerOrdersModule,
+    LeadsModule,
+    ReviewsModule,
   ],
   controllers: [HealthController],
 })

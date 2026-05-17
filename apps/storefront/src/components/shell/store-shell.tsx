@@ -1,32 +1,37 @@
 'use client';
 
 // Top-level client shell. Holds the "change pincode" modal state so the header can pop it
-// open from anywhere, and wraps everything in PincodeProvider so all descendants can read
-// the current pincode + serviceability. Server Components can still render as children
-// (this is the Next.js App Router pattern).
+// open from anywhere, and wraps everything in PincodeProvider + CartProvider +
+// CustomerProvider so all descendants can read the current pincode / cart / customer.
+// Server Components can still render as children (this is the Next.js App Router pattern).
 
 import * as React from 'react';
 import { Toaster } from 'sonner';
 import { usePathname } from 'next/navigation';
+import type { CustomerProfile } from '@repo/types';
 import { BottomNav } from './bottom-nav';
 import { Footer } from './footer';
 import { Header } from './header';
 import { FirstVisitPincodePrompt, PincodeModal } from '@/components/pincode/pincode-modal';
 import { CartProvider } from '@/lib/cart-context';
+import { CustomerProvider } from '@/lib/customer-context';
 import { PincodeProvider } from '@/lib/pincode-context';
 
 interface StoreShellProps {
   children: React.ReactNode;
   navCategories: Array<{ slug: string; name: string }>;
+  initialCustomer: CustomerProfile | null;
 }
 
-export function StoreShell({ children, navCategories }: StoreShellProps) {
+export function StoreShell({ children, navCategories, initialCustomer }: StoreShellProps) {
   return (
-    <PincodeProvider>
-      <CartProvider>
-        <Inner navCategories={navCategories}>{children}</Inner>
-      </CartProvider>
-    </PincodeProvider>
+    <CustomerProvider initial={initialCustomer}>
+      <PincodeProvider>
+        <CartProvider>
+          <Inner navCategories={navCategories}>{children}</Inner>
+        </CartProvider>
+      </PincodeProvider>
+    </CustomerProvider>
   );
 }
 

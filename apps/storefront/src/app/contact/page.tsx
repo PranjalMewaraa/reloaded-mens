@@ -2,6 +2,7 @@ import { MessageCircle, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StaticPage } from '@/components/static-page';
 import { env } from '@/lib/env';
+import { ContactForm } from './contact-form';
 
 export const metadata = { title: 'Contact & WhatsApp' };
 
@@ -27,6 +28,12 @@ export default function ContactPage() {
           {env.NEXT_PUBLIC_WHATSAPP_NUMBER}
         </a>
       </div>
+
+      <h2>Send us a message</h2>
+      <div className="not-prose">
+        <ContactForm whatsappHref={whatsappHref} />
+      </div>
+
       <h2>Email</h2>
       <p>
         For longer queries or wholesale interest, email{' '}

@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { Star } from 'lucide-react';
 import { Pill } from '@/components/ui/pill';
 import { formatINR } from '@/lib/utils';
 
@@ -15,6 +16,8 @@ export interface ProductCardData {
   colors: string[];
   isLowStock: boolean;
   isOutOfStock: boolean;
+  averageRating?: number | null;
+  reviewCount?: number;
 }
 
 interface ProductCardProps {
@@ -77,11 +80,22 @@ export function ProductCard({ product, sizes = '(min-width:768px) 25vw, 50vw' }:
         <h3 className="line-clamp-2 text-[13px] font-medium leading-snug text-ink-900">
           {product.name}
         </h3>
-        {product.colors.length > 0 ? (
-          <p className="text-[11.5px] text-ink-500">
-            {product.colors.length} colour{product.colors.length === 1 ? '' : 's'}
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2 text-[11.5px] text-ink-500">
+          {product.colors.length > 0 ? (
+            <span>
+              {product.colors.length} colour{product.colors.length === 1 ? '' : 's'}
+            </span>
+          ) : null}
+          {product.reviewCount && product.reviewCount > 0 ? (
+            <span className="inline-flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-clay text-clay" />
+              <span className="font-mono text-ink-900">
+                {(product.averageRating ?? 0).toFixed(1)}
+              </span>
+              <span>· {product.reviewCount}</span>
+            </span>
+          ) : null}
+        </div>
         <div className="mt-1 flex items-center gap-2">
           <span className="text-[13px] font-semibold text-ink-900">
             {formatINR(product.basePricePaisa)}

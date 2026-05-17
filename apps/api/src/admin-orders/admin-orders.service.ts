@@ -30,6 +30,9 @@ import {
   transitionTimestampField,
 } from '../orders/order-state-machine.js';
 import { AuditService } from '../audit/audit.service.js';
+import { ConfigService } from '@nestjs/config';
+import { EMAIL_SERVICE, type EmailService } from '../email/email.types.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 import { SHIPPING_PROVIDER_TOKEN, type ShippingProviderImpl } from '../shipping/shipping.types.js';
 
 // Admin-facing order operations. All endpoints assume the caller passed
@@ -40,7 +43,10 @@ import { SHIPPING_PROVIDER_TOKEN, type ShippingProviderImpl } from '../shipping/
 export class AdminOrdersService {
   constructor(
     private readonly audit: AuditService,
+    private readonly reviews: ReviewsService,
+    private readonly config: ConfigService,
     @Inject(SHIPPING_PROVIDER_TOKEN) private readonly shipping: ShippingProviderImpl,
+    @Inject(EMAIL_SERVICE) private readonly email: EmailService,
   ) {}
 
   // -------- GET /orders --------
@@ -376,6 +382,62 @@ export class AdminOrdersService {
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
     return order;
+  }
+
+  // -------- POST /orders/:id/send-review-invite --------
+
+  async sendReviewInvite(orderId: string, actor: { id: string }) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            variantLabel: true,
+            variant: { select: { product: { select: { slug: true } } } },
+          },
+        },
+        customer: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    if (order.state !== ORDER_STATE.DELIVERED) {
+      throw new BadRequestException('Review invites can only be sent for delivered orders');
+    }
+    const snapshot = order.contactSnapshot as Partial<ContactInfo> | null;
+    const to = order.customer?.email ?? snapshot?.email ?? null;
+    if (!to) {
+      throw new BadRequestException('No email on file for this order');
+    }
+    const storefrontUrl =
+      this.config.get<string>('NEXT_PUBLIC_STOREFRONT_URL') ?? 'http://localhost:3000';
+    const links = this.reviews.buildReviewLinksForOrder({
+      storefrontUrl,
+      orderId: order.id,
+      customerId: order.customer?.id ?? null,
+      items: order.items.map((i) => ({ id: i.id })),
+    });
+    const linkByItem = new Map(links.map((l) => [l.orderItemId, l.reviewUrl]));
+
+    await this.email.sendReviewInvite({
+      to,
+      customerName: order.customer?.name ?? snapshot?.name ?? '',
+      orderNumber: order.orderNumber,
+      items: order.items.map((i) => ({
+        orderItemId: i.id,
+        productName: i.productName,
+        productSlug: i.variant.product.slug,
+        variantLabel: i.variantLabel,
+        reviewUrl: linkByItem.get(i.id) ?? `${storefrontUrl}`,
+      })),
+    });
+    await this.audit.write(AUDIT_EVENT_TYPE.REVIEW_INVITE_SENT, {
+      adminUserId: actor.id,
+      resource: `order:${order.id}`,
+      payload: { to, items: order.items.length },
+    });
+    return { ok: true, to, items: order.items.length };
   }
 }
 

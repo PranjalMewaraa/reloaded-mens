@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { ProductCard, type ProductCardData } from '@/components/product/product-card';
 import { Pill } from '@/components/ui/pill';
 import { Pdp } from './pdp';
+import { ReviewsSection } from './reviews-section';
 import { publicApi } from '@/lib/api';
 import { formatINR } from '@/lib/utils';
 
@@ -30,6 +31,9 @@ interface ProductDetailResponse {
       stockCount: number;
       priceOverridePaisa: number | null;
     }>;
+    // Sprint 8 — review aggregate joined by the API. Always present on Sprint 8+ responses.
+    averageRating?: number | null;
+    reviewCount?: number;
   };
   related: ProductCardData[];
 }
@@ -83,6 +87,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
       </nav>
 
       <Pdp product={product} />
+
+      <ReviewsSection
+        productSlug={product.slug}
+        averageRating={product.averageRating ?? null}
+        reviewCount={product.reviewCount ?? 0}
+      />
 
       {related.length > 0 ? (
         <section className="px-5 pb-16 pt-10 md:px-8 md:pb-24 md:pt-16">

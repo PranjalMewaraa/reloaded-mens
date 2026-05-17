@@ -33,6 +33,7 @@ import { RefundDialog } from './refund-dialog';
 import { RefundDecisionPanel } from './refund-decision-panel';
 import {
   cancelOrderAction,
+  sendReviewInviteAction,
   transitionOrderAction,
 } from './actions';
 
@@ -317,6 +318,28 @@ export function OrderDetail({ order, role }: OrderDetailProps) {
                 <FileText className="mr-2 h-4 w-4" />
                 Open customer tracking link
               </Link>
+            </Button>
+          ) : null}
+
+          {order.state === ORDER_STATE.DELIVERED ? (
+            <Button
+              variant="outline"
+              size="default"
+              className="w-full"
+              disabled={pending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await sendReviewInviteAction(order.id, order.orderNumber);
+                  if (!result.ok || !result.data) {
+                    toast.error(result.error ?? 'Failed to send invite');
+                    return;
+                  }
+                  toast.success(`Review invite sent to ${result.data.to}`);
+                  router.refresh();
+                });
+              }}
+            >
+              <MessageSquare className="mr-2 h-4 w-4" /> Send review invite
             </Button>
           ) : null}
 

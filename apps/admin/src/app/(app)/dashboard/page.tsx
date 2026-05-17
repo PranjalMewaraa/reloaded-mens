@@ -7,12 +7,15 @@ import { Pill } from '@/components/ui/pill';
 export const metadata = { title: 'Dashboard' };
 
 export default async function DashboardPage() {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const [
     user,
     confirmedCount,
     paymentPendingCount,
     pendingRefundsCount,
     pendingReturnsCount,
+    pendingReviewsCount,
+    newLeadsCount,
     recentOrders,
   ] = await Promise.all([
       getCurrentUser(),
@@ -20,6 +23,8 @@ export default async function DashboardPage() {
       prisma.order.count({ where: { state: 'payment_pending', deletedAt: null } }),
       prisma.refundRequest.count({ where: { status: 'pending_admin_approval' } }),
       prisma.returnRequest.count({ where: { state: 'requested' } }),
+      prisma.review.count({ where: { status: 'pending' } }),
+      prisma.lead.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       prisma.order.findMany({
         where: { deletedAt: null },
         orderBy: { createdAt: 'desc' },
@@ -107,6 +112,39 @@ export default async function DashboardPage() {
               </div>
               <p className="mt-1 text-[12px] text-ink-500">
                 {pendingReturnsCount === 0 ? 'Inbox is empty.' : 'Review photos + decide.'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/reviews" className="block">
+          <Card className="transition hover:border-ink-300">
+            <CardHeader>
+              <CardTitle className="text-[12px] font-mono uppercase tracking-caps text-ink-500">
+                Pending reviews
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <div className="font-display text-[32px] font-semibold text-ink-900">{pendingReviewsCount}</div>
+                {pendingReviewsCount > 0 ? <Pill tone="warning" withDot>Moderation queue</Pill> : null}
+              </div>
+              <p className="mt-1 text-[12px] text-ink-500">
+                {pendingReviewsCount === 0 ? 'Nothing to moderate.' : 'Approve or reject inline.'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/leads" className="block">
+          <Card className="transition hover:border-ink-300">
+            <CardHeader>
+              <CardTitle className="text-[12px] font-mono uppercase tracking-caps text-ink-500">
+                New leads · 7d
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="font-display text-[32px] font-semibold text-ink-900">{newLeadsCount}</div>
+              <p className="mt-1 text-[12px] text-ink-500">
+                {newLeadsCount === 0 ? 'No leads this week.' : 'From /contact + Meta later.'}
               </p>
             </CardContent>
           </Card>

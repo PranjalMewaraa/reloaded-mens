@@ -455,6 +455,167 @@ async function main() {
     `  Promotions: 3 rows (${launchPromo.name}, ${welcomePromo.name}, ${influPromo.name}) + 51 coupons`,
   );
 
+  // -------- Sprint 8 — Customers + Leads + Reviews + demo delivered order --------
+
+  // Wipe per-run so the dev DB stays in sync with this seed.
+  await prisma.review.deleteMany({});
+  await prisma.lead.deleteMany({});
+  await prisma.customerOtp.deleteMany({});
+  // Don't wipe Customer rows — orders foreign-key into them; only the demo phones are upserted.
+
+  const demoCustomerA = await prisma.customer.upsert({
+    where: { phone: '+919999999991' },
+    update: { name: 'Demo Customer A', email: 'demo-a@example.com' },
+    create: {
+      phone: '+919999999991',
+      name: 'Demo Customer A',
+      email: 'demo-a@example.com',
+    },
+  });
+  const demoCustomerB = await prisma.customer.upsert({
+    where: { phone: '+919999999992' },
+    update: { name: 'Demo Customer B', email: 'demo-b@example.com' },
+    create: {
+      phone: '+919999999992',
+      name: 'Demo Customer B',
+      email: 'demo-b@example.com',
+    },
+  });
+  console.log(`  Customers: 2 demo rows (${demoCustomerA.phone}, ${demoCustomerB.phone})`);
+
+  // Three demo leads spanning new / contacted / qualified.
+  await prisma.lead.createMany({
+    data: [
+      {
+        source: 'website_signup',
+        status: 'new',
+        name: 'Akhil Verma',
+        phone: '+919999999993',
+        email: 'akhil@example.com',
+        message: 'Looking for a custom kurta for a sangeet next month.',
+      },
+      {
+        source: 'website_signup',
+        status: 'contacted',
+        name: 'Priya Iyer',
+        email: 'priya@example.com',
+        message: 'Do you carry XS in the linen shirts?',
+        contactedAt: new Date(),
+        internalNote: 'Sent fit guide via WhatsApp.',
+      },
+      {
+        source: 'manual',
+        status: 'qualified',
+        name: 'Rohan Mehta',
+        phone: '+919999999995',
+        message: 'Office bulk order, ~30 trousers. Wants a quote.',
+        internalNote: 'Asked for sizes; awaiting reply.',
+      },
+    ],
+  });
+  console.log('  Leads: 3 demo rows');
+
+  // Demo delivered order so the PDP can show one approved review and the admin "Send
+  // review invite" button has something to act on.
+  const existingDemoOrder = await prisma.order.findFirst({
+    where: { orderNumber: 'RLD-SEED01' },
+  });
+  let demoOrderId = existingDemoOrder?.id ?? null;
+  if (!demoOrderId) {
+    const camp = await prisma.product.findUnique({ where: { slug: 'mool-camp-shirt' } });
+    const variant = camp
+      ? await prisma.productVariant.findFirst({
+          where: { productId: camp.id, isActive: true, deletedAt: null },
+        })
+      : null;
+    if (camp && variant) {
+      const trackingToken = `seed-${Math.random().toString(36).slice(2, 14)}`;
+      const order = await prisma.order.create({
+        data: {
+          orderNumber: 'RLD-SEED01',
+          customerId: demoCustomerB.id,
+          idempotencyKey: `seed-${Math.random().toString(36).slice(2, 14)}`,
+          state: 'delivered',
+          paymentState: 'paid',
+          subtotalPaisa: camp.basePricePaisa,
+          totalPaisa: camp.basePricePaisa,
+          contactSnapshot: {
+            name: demoCustomerB.name,
+            phone: demoCustomerB.phone,
+            email: demoCustomerB.email,
+          },
+          shippingAddressSnapshot: {
+            name: demoCustomerB.name,
+            phone: demoCustomerB.phone,
+            line1: '12 Demo Street',
+            line2: 'Apt 4B',
+            city: 'Bengaluru',
+            state: 'Karnataka',
+            pincode: '560001',
+            country: 'IN',
+          },
+          trackingToken,
+          placedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+          confirmedAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000),
+          packedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+          shippedAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000),
+          deliveredAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+          items: {
+            create: [
+              {
+                variantId: variant.id,
+                productName: camp.name,
+                variantLabel: [variant.size, variant.color].filter(Boolean).join(' · ') || null,
+                sku: variant.sku,
+                quantity: 1,
+                unitPricePaisa: camp.basePricePaisa,
+                totalPaisa: camp.basePricePaisa,
+              },
+            ],
+          },
+        },
+        include: { items: true },
+      });
+      demoOrderId = order.id;
+
+      // One approved review on this order's item.
+      const orderItem = order.items[0];
+      if (orderItem) {
+        await prisma.review.create({
+          data: {
+            productId: camp.id,
+            orderItemId: orderItem.id,
+            customerId: demoCustomerB.id,
+            authorName: demoCustomerB.name ?? 'Customer',
+            rating: 5,
+            title: 'Cut beautifully, soft fabric',
+            body: 'Boxy in the right places, just the right weight for Bengaluru summer. Sized down half — TTS for an oversized look.',
+            status: 'approved',
+            approvedAt: new Date(),
+          },
+        });
+      }
+      console.log('  Reviews: 1 approved seeded on RLD-SEED01');
+    }
+  }
+  if (!demoOrderId) {
+    console.log('  Reviews: skipped — could not seed a demo order');
+  }
+
+  // Sprint 8 settings.
+  const sprint8Settings: Array<[string, unknown]> = [
+    ['customer_auth.otp_ttl_minutes', 10],
+    ['customer_auth.otp_max_attempts', 5],
+    ['reviews.window_days', 60],
+  ];
+  for (const [key, value] of sprint8Settings) {
+    await prisma.setting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value: value as never },
+    });
+  }
+
   console.log('Done.');
 }
 

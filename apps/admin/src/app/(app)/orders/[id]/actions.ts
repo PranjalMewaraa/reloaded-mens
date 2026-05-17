@@ -112,3 +112,16 @@ export async function rejectRefundAction(
   revalidatePath('/orders/refunds');
   return { ok: true };
 }
+
+export async function sendReviewInviteAction(
+  orderId: string,
+  orderNumber: string,
+): Promise<ActionResult<{ ok: true; to: string; items: number }>> {
+  const res = await api<{ ok: true; to: string; items: number }>(
+    `/orders/${orderId}/send-review-invite`,
+    { method: 'POST' },
+  );
+  if (!res.ok || !res.body) return { ok: false, error: describeError(res.body) };
+  revalidatePath(`/orders/${orderNumber}`);
+  return { ok: true, data: res.body };
+}

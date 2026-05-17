@@ -9,6 +9,7 @@ import {
   PackageOpen,
   Percent,
   ShoppingBag,
+  Star,
   Tags,
   UserRound,
   Users,
@@ -47,12 +48,14 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Growth',
     items: [
-      { label: 'Customers', href: '/customers', icon: Users, enabled: false },
-      { label: 'Leads', href: '/leads', icon: UserRound, enabled: false },
+      { label: 'Customers', href: '/customers', icon: Users, enabled: true },
+      { label: 'Leads', href: '/leads', icon: UserRound, enabled: true },
+      { label: 'Reviews', href: '/reviews', icon: Star, enabled: true },
       { label: 'Promotions', href: '/promotions', icon: Percent, enabled: true },
     ],
   },
 ];
+
 
 export function Sidebar() {
   const pathname = usePathname();

@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, JetBrains_Mono, Fraunces } from 'next/font/google';
 import './globals.css';
 import { StoreShell } from '@/components/shell/store-shell';
 import { publicApi } from '@/lib/api';
+import { getCustomerProfile } from '@/lib/customer-server';
 import { env } from '@/lib/env';
 
 interface CategoryTreeNode {
@@ -41,8 +42,13 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Fetch the category tree once at the root layout so every page renders the same nav
   // without re-fetching. We flatten root-level categories for the desktop nav strip and
-  // the mobile drawer.
-  const res = await publicApi<{ items: CategoryTreeNode[] }>('/public/categories');
+  // the mobile drawer. Sprint 8 — also read the customer profile from the cookie so the
+  // header can render the right CTA on first paint (no client-flash from "Sign in" to
+  // "Account").
+  const [res, customer] = await Promise.all([
+    publicApi<{ items: CategoryTreeNode[] }>('/public/categories'),
+    getCustomerProfile(),
+  ]);
   const navCategories =
     res.ok && res.body
       ? res.body.items.map((n) => ({ slug: n.slug, name: n.name }))
@@ -54,7 +60,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${jakarta.variable} ${jetbrains.variable} ${fraunces.variable}`}
     >
       <body className="font-sans">
-        <StoreShell navCategories={navCategories}>{children}</StoreShell>
+        <StoreShell navCategories={navCategories} initialCustomer={customer}>
+          {children}
+        </StoreShell>
       </body>
     </html>
   );

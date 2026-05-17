@@ -146,6 +146,19 @@ export const AUDIT_EVENT_TYPE = {
   COUPONS_BULK_GENERATED: 'coupons.bulk_generated',
   COUPON_CREATED: 'coupon.created',
   COUPON_DEACTIVATED: 'coupon.deactivated',
+  // Sprint 8 — customer auth + leads + reviews.
+  CUSTOMER_OTP_REQUESTED: 'customer.otp.requested',
+  CUSTOMER_OTP_VERIFIED: 'customer.otp.verified',
+  CUSTOMER_OTP_FAILED: 'customer.otp.failed',
+  CUSTOMER_PROFILE_UPDATED: 'customer.profile.updated',
+  CUSTOMER_LOGOUT: 'customer.logout',
+  LEAD_CREATED: 'lead.created',
+  LEAD_UPDATED: 'lead.updated',
+  LEAD_DELETED: 'lead.deleted',
+  REVIEW_SUBMITTED: 'review.submitted',
+  REVIEW_APPROVED: 'review.approved',
+  REVIEW_REJECTED: 'review.rejected',
+  REVIEW_INVITE_SENT: 'review.invite.sent',
 } as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPE)[keyof typeof AUDIT_EVENT_TYPE];
 
@@ -266,6 +279,21 @@ export const PROMOTION_ACTION_TYPE = {
 } as const;
 export type PromotionActionType =
   (typeof PROMOTION_ACTION_TYPE)[keyof typeof PROMOTION_ACTION_TYPE];
+
+// Sprint 8 — review moderation status. Storefront only renders APPROVED.
+export const REVIEW_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const;
+export type ReviewStatus = (typeof REVIEW_STATUS)[keyof typeof REVIEW_STATUS];
+
+// Sprint 8 — OTP delivery channel. SMS lands in Sprint 12 with MSG91 onboarding.
+export const OTP_CHANNEL = {
+  EMAIL: 'email',
+  SMS: 'sms',
+} as const;
+export type OtpChannel = (typeof OTP_CHANNEL)[keyof typeof OTP_CHANNEL];
 
 // Returned by /cart/evaluate so the storefront can render "Code applied" vs
 // the specific reason a code didn't take.
