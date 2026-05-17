@@ -181,17 +181,19 @@ export function CartView() {
                   />
                 ) : null}
               </div>
-              <div className="flex flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col">
                 <Link
                   href={`/p/${item.productSlug}`}
-                  className="text-[14px] font-medium text-ink-900 hover:underline"
+                  className="line-clamp-2 text-[14px] font-medium text-ink-900 hover:underline"
                 >
                   {item.productName}
                 </Link>
-                <span className="font-mono text-[10.5px] uppercase tracking-caps text-ink-500">
-                  {[item.variantLabel, item.sku].filter(Boolean).join(' · ')}
-                </span>
-                <div className="mt-2 flex items-center gap-3">
+                {item.variantLabel ? (
+                  <span className="font-mono text-[10.5px] uppercase tracking-caps text-ink-500">
+                    {item.variantLabel}
+                  </span>
+                ) : null}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                   <QtyStepper
                     quantity={item.quantity}
                     onChange={(q) => updateQuantity(item.variantId, q)}

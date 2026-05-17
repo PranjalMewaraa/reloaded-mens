@@ -78,7 +78,7 @@ export function DeliveryWidget({ className }: { className?: string }) {
             <button
               type="button"
               onClick={clearPincode}
-              className="mt-2 font-mono text-[10.5px] uppercase tracking-caps text-ink-500 underline-offset-2 hover:underline"
+              className="mt-2 block text-left font-mono text-[10.5px] uppercase tracking-caps text-ink-500 underline-offset-2 hover:underline"
             >
               Delivering to {pincode} · change
             </button>
