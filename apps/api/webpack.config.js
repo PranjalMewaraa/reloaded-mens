@@ -28,10 +28,11 @@ module.exports = (options, _webpack) => {
     resolve: {
       ...options.resolve,
       extensions: ['.ts', '.tsx', '.js', '.json'],
-      // Map .js specifiers back to .ts source — required because workspace packages
-      // (@repo/types, @repo/ui) use Node-ESM '.js' imports for Node runtime correctness.
+      // Map .js specifiers back to .ts/.tsx source. Workspace packages (@repo/types,
+      // @repo/ui) use Node-ESM '.js' imports for runtime correctness; the email module
+      // also has React Email .tsx templates imported via `.js` suffix.
       extensionAlias: {
-        '.js': ['.js', '.ts'],
+        '.js': ['.js', '.ts', '.tsx'],
         '.cjs': ['.cjs', '.cts'],
         '.mjs': ['.mjs', '.mts'],
       },

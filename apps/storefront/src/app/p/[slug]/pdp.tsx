@@ -8,9 +8,11 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { MessageCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { DeliveryWidget } from '@/components/pincode/delivery-widget';
+import { useCart } from '@/lib/cart-context';
 import { env } from '@/lib/env';
 import { cn, formatINR } from '@/lib/utils';
 
@@ -46,6 +48,7 @@ export function Pdp({ product }: PdpProps) {
     [product.images],
   );
   const [activeImageIndex, setActiveImageIndex] = React.useState(0);
+  const { addItem } = useCart();
 
   // Variant selection. We pick the first in-stock variant by default so the price
   // displayed reflects something the customer can actually buy.
@@ -99,6 +102,28 @@ export function Pdp({ product }: PdpProps) {
   const whatsappHref = `https://wa.me/${env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
     `Hi! I'd like to book a fitting for "${product.name}".`,
   )}`;
+
+  function handleAddToBag() {
+    if (!selectedVariant) {
+      toast.error('Pick a size and colour first');
+      return;
+    }
+    if (selectedVariant.stockCount <= 0) {
+      toast.error('That option is sold out');
+      return;
+    }
+    const variantLabel = [selectedVariant.size, selectedVariant.color].filter(Boolean).join(' · ') || null;
+    addItem({
+      variantId: selectedVariant.id,
+      productSlug: product.slug,
+      productName: product.name,
+      variantLabel,
+      sku: selectedVariant.sku,
+      primaryImageUrl: sortedImages[0]?.url ?? null,
+      unitPricePaisa: displayPricePaisa,
+    });
+    toast.success(`Added to bag · ${variantLabel ?? product.name}`);
+  }
 
   return (
     <div className="grid gap-8 px-5 py-6 md:grid-cols-[7fr_5fr] md:gap-12 md:px-8 md:py-8">
@@ -282,8 +307,14 @@ export function Pdp({ product }: PdpProps) {
               </a>
             </Button>
           ) : (
-            <Button size="lg" variant="clay" className="w-full" disabled>
-              {isOutOfStock ? 'Sold out' : 'Add to bag · coming soon'}
+            <Button
+              size="lg"
+              variant="clay"
+              className="w-full"
+              onClick={handleAddToBag}
+              disabled={isOutOfStock}
+            >
+              {isOutOfStock ? 'Sold out' : `Add to bag · ${formatINR(displayPricePaisa)}`}
             </Button>
           )}
         </div>
@@ -325,7 +356,13 @@ export function Pdp({ product }: PdpProps) {
               </a>
             </Button>
           ) : (
-            <Button size="md" variant="clay" className="flex-1" disabled>
+            <Button
+              size="md"
+              variant="clay"
+              className="flex-1"
+              onClick={handleAddToBag}
+              disabled={isOutOfStock}
+            >
               {isOutOfStock ? 'Sold out' : 'Add to bag'}
             </Button>
           )}

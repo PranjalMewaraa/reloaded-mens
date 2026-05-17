@@ -14,7 +14,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: 'Home', href: '/dashboard', icon: Home, enabled: true },
-  { label: 'Orders', href: '/orders', icon: ShoppingBag, enabled: false },
+  { label: 'Orders', href: '/orders', icon: ShoppingBag, enabled: true },
   { label: 'Products', href: '/products', icon: Box, enabled: true },
   { label: 'Stock', href: '/inventory', icon: Package, enabled: true },
   { label: 'More', href: '/more', icon: Tags, enabled: false },

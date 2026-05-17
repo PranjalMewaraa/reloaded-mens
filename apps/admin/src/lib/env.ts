@@ -11,11 +11,15 @@ const schema = z.object({
     .url()
     .default('http://localhost:4000'),
   NEXT_PUBLIC_ADMIN_URL: z.string().url().default('http://localhost:3001'),
+  // Sprint 5 — admin renders the customer-facing tracking link on the order detail
+  // page so staff can preview what the buyer sees.
+  NEXT_PUBLIC_STOREFRONT_URL: z.string().url().default('http://localhost:3000'),
 });
 
 export const env = schema.parse({
   NEXT_PUBLIC_ADMIN_API_URL: process.env.NEXT_PUBLIC_ADMIN_API_URL,
   NEXT_PUBLIC_ADMIN_URL: process.env.NEXT_PUBLIC_ADMIN_URL,
+  NEXT_PUBLIC_STOREFRONT_URL: process.env.NEXT_PUBLIC_STOREFRONT_URL,
 });
 
 // The API mounts everything under /api/v1.

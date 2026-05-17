@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Menu, MapPin, Search as SearchIcon, ShoppingBag, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { useCart } from '@/lib/cart-context';
 import { env } from '@/lib/env';
 import { usePincode } from '@/lib/pincode-context';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ interface HeaderProps {
 // - Nav row with logo center, links left, pincode/search/bag right
 export function Header({ navCategories, onChangePincode }: HeaderProps) {
   const { pincode } = usePincode();
+  const { totalQuantity } = useCart();
   const [navOpen, setNavOpen] = React.useState(false);
 
   return (
@@ -69,14 +71,18 @@ export function Header({ navCategories, onChangePincode }: HeaderProps) {
           >
             <SearchIcon className="h-5 w-5" />
           </Link>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-md text-ink-400"
-            aria-label="Cart"
-            disabled
+          <Link
+            href="/cart"
+            className="relative flex h-10 w-10 items-center justify-center rounded-md text-ink-900"
+            aria-label={totalQuantity > 0 ? `Cart (${totalQuantity})` : 'Cart'}
           >
             <ShoppingBag className="h-5 w-5" />
-          </button>
+            {totalQuantity > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 font-mono text-[10px] font-medium text-snow">
+                {totalQuantity}
+              </span>
+            ) : null}
+          </Link>
         </div>
       </div>
 
@@ -119,14 +125,18 @@ export function Header({ navCategories, onChangePincode }: HeaderProps) {
           >
             <SearchIcon className="h-4 w-4" />
           </Link>
-          <button
-            type="button"
-            disabled
-            className="flex h-9 w-9 items-center justify-center rounded-full text-ink-400"
-            aria-label="Cart (coming soon)"
+          <Link
+            href="/cart"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full text-ink-900 hover:bg-ink-50"
+            aria-label={totalQuantity > 0 ? `Cart (${totalQuantity})` : 'Cart'}
           >
             <ShoppingBag className="h-4 w-4" />
-          </button>
+            {totalQuantity > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 font-mono text-[10px] font-medium text-snow">
+                {totalQuantity}
+              </span>
+            ) : null}
+          </Link>
         </div>
       </div>
 

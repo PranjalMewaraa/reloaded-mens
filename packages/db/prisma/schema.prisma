@@ -76,6 +76,7 @@ model Customer {
   deletedAt                  DateTime?
 
   addresses Address[]
+  orders    Order[]
 
   @@index([phone])
   @@index([email])
@@ -201,8 +202,11 @@ model ProductVariant {
   updatedAt           DateTime  @updatedAt
   deletedAt           DateTime?
 
-  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  inventoryEvents InventoryEvent[]
+  product              Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryEvents      InventoryEvent[]
+  orderItems           OrderItem[]
+  returnLines          ReturnLineItem[] @relation("ReturnedVariant")
+  exchangeReservations ReturnLineItem[] @relation("ExchangeVariant")
 
   @@index([productId])
   @@index([sku])
@@ -241,4 +245,345 @@ model Setting {
   updatedBy String?
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+}
+
+// =====================================================
+// Orders (Sprint 4) — customer purchases. Items capture
+// denormalised snapshots so historical orders stay correct
+// when the catalog rows change underneath.
+// =====================================================
+model Order {
+  id                      String    @id @default(cuid())
+  orderNumber             String    @unique // 'RLD-000123'
+  customerId              String?
+  // Idempotency key sent by client on POST /public/orders. Repeat requests with the
+  // same key return the existing order instead of double-creating.
+  idempotencyKey          String    @unique
+  // See ORDER_STATE in @repo/types. Sprint 4 uses only: 'payment_pending',
+  // 'confirmed', 'payment_failed', 'cancelled'.
+  state                   String    @default("payment_pending")
+  // 'pending' | 'paid' | 'failed' | 'refunded' | 'partially_refunded'
+  paymentState            String    @default("pending")
+  subtotalPaisa           Int
+  discountPaisa           Int       @default(0)
+  shippingPaisa           Int       @default(0)
+  taxPaisa                Int       @default(0)
+  totalPaisa              Int
+  appliedCouponCode       String?
+  // Denormalised snapshots so live profile edits don't rewrite history.
+  contactSnapshot         Json // { name, phone, email }
+  shippingAddressSnapshot Json // { name, phone, line1, line2, city, state, pincode }
+  customerNote            String?
+  // Single staff-visible note. Edited inline on the admin detail page. Sprint 6+
+  // can upgrade this to a per-comment thread if ops needs it.
+  internalNote            String?
+  etaDateFrom             DateTime?
+  etaDateTo               DateTime?
+  // Sprint 5 — lifecycle timestamps. Set as the order moves through the state machine.
+  placedAt                DateTime  @default(now())
+  confirmedAt             DateTime?
+  packedAt                DateTime?
+  shippedAt               DateTime?
+  outForDeliveryAt        DateTime?
+  deliveredAt             DateTime?
+  cancelledAt             DateTime?
+  cancelReason            String?
+  // Carrier-side AWB / tracking id. Sprint 11 wires Shiprocket; Sprint 5 stores the
+  // mock provider's fake 'MOCK-AWB-NNNNNN'.
+  trackingNumber          String?
+  // HMAC token derived from (orderId, phone, secret). Public tracking endpoints
+  // require ?t=<token> matching this value. Stable for the order's lifetime.
+  // Nullable for migration safety (Sprint 4 orders pre-date it) but new orders
+  // always populate it — public-tracking enforces non-null at the service layer.
+  trackingToken           String?   @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+
+  // Sprint 7 — promotion ids stamped at order placement. Immutable; admin order
+  // detail looks up the named promotions for the totals card breakdown.
+  appliedPromotionIds String[] @default([])
+
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  payments       Payment[]
+  events         OrderEvent[]
+  refundRequests RefundRequest[]
+  returnRequests ReturnRequest[]
+  couponUsages   CouponUsage[]
+
+  @@index([customerId])
+  @@index([state])
+  @@index([paymentState])
+  @@index([createdAt])
+  @@index([trackingNumber])
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  variantId      String
+  // Snapshot fields — frozen at order placement.
+  productName    String
+  variantLabel   String? // 'M · Black'
+  sku            String
+  hsnCode        String?
+  gstRatePercent Int?
+  quantity       Int
+  unitPricePaisa Int // pre-tax, post any per-line discount
+  discountPaisa  Int      @default(0)
+  taxPaisa       Int      @default(0)
+  totalPaisa     Int // quantity * unitPrice - discount + tax
+  createdAt      DateTime @default(now())
+
+  order           Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant         ProductVariant   @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  returnLineItems ReturnLineItem[]
+
+  @@index([orderId])
+  @@index([variantId])
+}
+
+// =====================================================
+// Promotion (Sprint 7) — merchandising rule. The condition+action JSON columns
+// are validated by Zod discriminated unions in @repo/types on every write so
+// the database stores only well-formed payloads.
+// =====================================================
+model Promotion {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  // When true, applies silently if conditions match and no coupon is entered.
+  isAutomatic   Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  // When false, this promotion cannot stack with any other (it wins alone if
+  // selected). When true, the engine sorts by stackPriority ascending and
+  // applies in order.
+  stackable     Boolean   @default(false)
+  stackPriority Int       @default(100)
+  validFrom     DateTime?
+  validTo       DateTime?
+  // Array of { type: 'cart_subtotal_min' | ... , ...typed payload }. AND across entries.
+  conditions    Json      @default("[]")
+  // Array of { type: 'percent_off_order' | ... , ...typed payload }.
+  actions       Json      @default("[]")
+  usageCount    Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  coupons Coupon[]
+
+  @@index([isActive, isAutomatic])
+  @@index([validFrom, validTo])
+}
+
+// =====================================================
+// Coupon (Sprint 7) — redeemable code pointing to a Promotion. Many coupons
+// can share one promotion (bulk influencer drops use batchLabel to group).
+// =====================================================
+model Coupon {
+  id                    String   @id @default(cuid())
+  code                  String   @unique // stored uppercase
+  promotionId           String
+  // 0 = unlimited. Hard cap on total redemptions.
+  usageLimitTotal       Int      @default(0)
+  // 0 = unlimited. Cap per customer (Customer.id if logged in; else phone).
+  usageLimitPerCustomer Int      @default(1)
+  usageCount            Int      @default(0)
+  isActive              Boolean  @default(true)
+  // Bulk-generated batches share this label so admins can filter/export per drop.
+  batchLabel            String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  promotion Promotion     @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  usages    CouponUsage[]
+
+  @@index([promotionId])
+  @@index([batchLabel])
+}
+
+// =====================================================
+// CouponUsage (Sprint 7) — ledger row written when an order successfully
+// redeems a coupon. customerId is preferred (Sprint 8 auth); until then `phone`
+// is the per-customer dedupe key.
+// =====================================================
+model CouponUsage {
+  id         String   @id @default(cuid())
+  couponId   String
+  customerId String?
+  phone      String?
+  orderId    String   @unique
+  createdAt  DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, customerId])
+  @@index([couponId, phone])
+}
+
+// =====================================================
+// Payments (Sprint 4) — one row per checkout attempt.
+// Real PhonePe arrives in Sprint 10; the mock provider
+// uses these rows now so the schema is forward-compatible.
+// =====================================================
+model Payment {
+  id                String    @id @default(cuid())
+  orderId           String
+  // 'mock' | 'phonepe' (Phase 2)
+  provider          String
+  // Provider-side session id. Mock = local UUID; PhonePe = merchantTransactionId.
+  providerSessionId String    @unique
+  amountPaisa       Int
+  // 'pending' | 'captured' | 'failed' | 'refunded'
+  status            String    @default("pending")
+  rawWebhook        Json?
+  capturedAt        DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// =====================================================
+// OrderEvent (Sprint 5) — append-only audit trail for the
+// order timeline. Customer tracking + admin detail both
+// render rows from here.
+// =====================================================
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  // ORDER_EVENT_TYPE in @repo/types — state transitions ('state.confirmed', etc.)
+  // plus side channels ('payment.captured', 'payment.refunded', 'note.updated',
+  // 'tracking.assigned').
+  eventType String
+  // Optional human-readable description rendered verbatim in timelines.
+  message   String?
+  // 'system' | 'customer' | 'staff' | 'admin'
+  actor     String
+  actorId   String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@index([eventType])
+}
+
+// =====================================================
+// RefundRequest (Sprint 5) — staff requests a refund,
+// admin approves. Sprint 10 wires the real PhonePe refund
+// API; today the mock provider just flips Payment.status.
+// =====================================================
+model RefundRequest {
+  id             String    @id @default(cuid())
+  refundNumber   String    @unique // 'RFD-000123'
+  orderId        String
+  // REFUND_STATUS in @repo/types:
+  // 'pending_admin_approval' | 'approved' | 'rejected' | 'completed'
+  status         String    @default("pending_admin_approval")
+  amountPaisa    Int
+  reason         String
+  // AdminUser.id of staff/admin who filed the request. Kept as plain string (no FK)
+  // so deactivating an admin doesn't cascade-delete the audit trail.
+  requestedBy    String
+  approvedBy     String?
+  rejectedReason String?
+  // PAYMENT_PROVIDER enum — set at approval time so we know which provider handled
+  // the actual refund (mock now; phonepe in Sprint 10).
+  provider       String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  returnRequests ReturnRequest[]
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// =====================================================
+// ReturnRequest (Sprint 6) — customer-initiated returns/exchanges.
+// Tied to a single Order but can span any subset of its OrderItems.
+// =====================================================
+model ReturnRequest {
+  id                String    @id @default(cuid())
+  returnNumber      String    @unique // 'RTN-000123'
+  orderId           String
+  // RETURN_STATE in @repo/types — Sprint 6 uses: 'requested', 'approved', 'rejected',
+  // 'pickup_scheduled', 'store_dropoff_pending', 'in_transit', 'received',
+  // 'verified', 'completed', 'cancelled'.
+  state             String    @default("requested")
+  // 'courier_pickup' | 'store_dropoff' (RETURN_METHOD in @repo/types)
+  method            String
+  customerNote      String?
+  internalNote      String?
+  rejectedReason    String?
+  // Linked refund. Verification of any 'return' line auto-creates one and stamps
+  // this — null when the request is exchange-only or replacement-only.
+  refundRequestId   String?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  pickupScheduledAt DateTime?
+  receivedAt        DateTime?
+  verifiedAt        DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order         Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  items         ReturnLineItem[]
+  refundRequest RefundRequest?   @relation(fields: [refundRequestId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([state])
+  @@index([createdAt])
+}
+
+// =====================================================
+// ReturnLineItem (Sprint 6) — one row per line of the original order being
+// returned. Snapshot fields mirror OrderItem so historical returns stay intact.
+// =====================================================
+model ReturnLineItem {
+  id                    String    @id @default(cuid())
+  returnRequestId       String
+  orderItemId           String
+  variantId             String
+  productName           String
+  variantLabel          String?
+  sku                   String
+  unitPricePaisa        Int
+  quantity              Int
+  // RETURN_REASON enum: 'size_issue' | 'quality' | 'not_as_expected' | 'damaged' | 'other'
+  reason                String
+  reasonNote            String?
+  // RETURN_TYPE enum: 'return' | 'exchange' | 'replacement'
+  action                String
+  exchangeVariantId     String?
+  exchangeVariantLabel  String?
+  // Set on admin verification — 'as_new' | 'used' | 'damaged'. Null until verified.
+  verifiedCondition     String?
+  // 'restock' | 'damage_writeoff' | 'pending' (default until verified).
+  restockDecision       String    @default("pending")
+  photoUrls             String[]  @default([])
+  // Sprint 6 stamps the deadline; Sprint 17 cron scans it. ProductVariant.reservedForExchange
+  // holds the actual count being held.
+  exchangeReservedUntil DateTime?
+  createdAt             DateTime  @default(now())
+
+  returnRequest   ReturnRequest    @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  variant         ProductVariant   @relation("ReturnedVariant", fields: [variantId], references: [id], onDelete: Restrict)
+  exchangeVariant ProductVariant?  @relation("ExchangeVariant", fields: [exchangeVariantId], references: [id], onDelete: SetNull)
+
+  @@index([returnRequestId])
+  @@index([variantId])
+  @@index([exchangeVariantId])
 }

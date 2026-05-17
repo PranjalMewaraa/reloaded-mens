@@ -11,6 +11,15 @@ import { CategoriesModule } from './categories/categories.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { VariantsModule } from './variants/variants.module.js';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { EmailModule } from './email/email.module.js';
+import { PublicCheckoutModule } from './public-checkout/public-checkout.module.js';
+import { ShippingModule } from './shipping/shipping.module.js';
+import { AdminOrdersModule } from './admin-orders/admin-orders.module.js';
+import { RefundsModule } from './refunds/refunds.module.js';
+import { PublicTrackingModule } from './public-tracking/public-tracking.module.js';
+import { ReturnsModule } from './returns/returns.module.js';
+import { PromotionsModule } from './promotions/promotions.module.js';
 
 @Module({
   imports: [
@@ -34,6 +43,15 @@ import { PublicCatalogModule } from './public-catalog/public-catalog.module.js';
     ProductsModule,
     VariantsModule,
     PublicCatalogModule,
+    PaymentsModule,
+    EmailModule,
+    ShippingModule,
+    PublicTrackingModule,
+    PublicCheckoutModule,
+    AdminOrdersModule,
+    RefundsModule,
+    ReturnsModule,
+    PromotionsModule,
   ],
   controllers: [HealthController],
 })

@@ -6,6 +6,7 @@ import {
   Box,
   Home,
   Package,
+  PackageOpen,
   Percent,
   ShoppingBag,
   Tags,
@@ -31,7 +32,8 @@ const SECTIONS: NavSection[] = [
     label: 'Operations',
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: Home, enabled: true },
-      { label: 'Orders', href: '/orders', icon: ShoppingBag, enabled: false },
+      { label: 'Orders', href: '/orders', icon: ShoppingBag, enabled: true },
+      { label: 'Returns', href: '/orders/returns', icon: PackageOpen, enabled: true },
       { label: 'Inventory', href: '/inventory', icon: Package, enabled: true },
     ],
   },
@@ -47,7 +49,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { label: 'Customers', href: '/customers', icon: Users, enabled: false },
       { label: 'Leads', href: '/leads', icon: UserRound, enabled: false },
-      { label: 'Promotions', href: '/promotions', icon: Percent, enabled: false },
+      { label: 'Promotions', href: '/promotions', icon: Percent, enabled: true },
     ],
   },
 ];

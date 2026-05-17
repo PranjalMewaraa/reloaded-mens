@@ -377,6 +377,84 @@ async function main() {
   const totalVariants = PRODUCTS.reduce((sum, p) => sum + p.variants.length, 0);
   console.log(`  Products: ${PRODUCTS.length} rows, ${totalVariants} variants`);
 
+  // -------- Promotions + coupons (Sprint 7) --------
+  // Reset every run so the dev DB stays in sync with this seed. Production data
+  // never runs through the seed.
+  await prisma.couponUsage.deleteMany({});
+  await prisma.coupon.deleteMany({});
+  await prisma.promotion.deleteMany({});
+
+  const launchPromo = await prisma.promotion.create({
+    data: {
+      name: 'Launch week 10% off',
+      description: 'Automatic order-wide discount above ₹1,999 for the first two weeks.',
+      isAutomatic: true,
+      isActive: true,
+      stackable: false,
+      stackPriority: 100,
+      validFrom: null,
+      validTo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      conditions: [{ type: 'cart_subtotal_min', amountPaisa: 199900 }] as never,
+      actions: [{ type: 'percent_off_order', percent: 10 }] as never,
+    },
+  });
+
+  const welcomePromo = await prisma.promotion.create({
+    data: {
+      name: 'Welcome bonus',
+      description: 'Coupon-gated ₹200 off for first-time customers.',
+      isAutomatic: false,
+      isActive: true,
+      stackable: false,
+      stackPriority: 50,
+      conditions: [{ type: 'customer_first_time' }] as never,
+      actions: [{ type: 'flat_off_order', amountPaisa: 20000 }] as never,
+    },
+  });
+  await prisma.coupon.create({
+    data: {
+      code: 'WELCOME200',
+      promotionId: welcomePromo.id,
+      usageLimitTotal: 0,
+      usageLimitPerCustomer: 1,
+    },
+  });
+
+  // Bulk influencer drop — 50 single-use codes, 25% off.
+  const influPromo = await prisma.promotion.create({
+    data: {
+      name: 'Influencer drop · 25% off',
+      description: 'Single-use codes shared by collaborators.',
+      isAutomatic: false,
+      isActive: true,
+      stackable: false,
+      stackPriority: 30,
+      conditions: [] as never,
+      actions: [{ type: 'percent_off_order', percent: 25 }] as never,
+    },
+  });
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const seenCodes = new Set<string>();
+  const couponData: { code: string; promotionId: string; usageLimitTotal: number; usageLimitPerCustomer: number; batchLabel: string }[] = [];
+  while (couponData.length < 50) {
+    let body = '';
+    for (let i = 0; i < 6; i++) body += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    const code = `INFLU${body}`;
+    if (seenCodes.has(code)) continue;
+    seenCodes.add(code);
+    couponData.push({
+      code,
+      promotionId: influPromo.id,
+      usageLimitTotal: 1,
+      usageLimitPerCustomer: 1,
+      batchLabel: 'launch-influencers',
+    });
+  }
+  await prisma.coupon.createMany({ data: couponData });
+  console.log(
+    `  Promotions: 3 rows (${launchPromo.name}, ${welcomePromo.name}, ${influPromo.name}) + 51 coupons`,
+  );
+
   console.log('Done.');
 }
 

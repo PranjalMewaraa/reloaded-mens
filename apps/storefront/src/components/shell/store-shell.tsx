@@ -6,10 +6,13 @@
 // (this is the Next.js App Router pattern).
 
 import * as React from 'react';
+import { Toaster } from 'sonner';
+import { usePathname } from 'next/navigation';
 import { BottomNav } from './bottom-nav';
 import { Footer } from './footer';
 import { Header } from './header';
 import { FirstVisitPincodePrompt, PincodeModal } from '@/components/pincode/pincode-modal';
+import { CartProvider } from '@/lib/cart-context';
 import { PincodeProvider } from '@/lib/pincode-context';
 
 interface StoreShellProps {
@@ -20,7 +23,9 @@ interface StoreShellProps {
 export function StoreShell({ children, navCategories }: StoreShellProps) {
   return (
     <PincodeProvider>
-      <Inner navCategories={navCategories}>{children}</Inner>
+      <CartProvider>
+        <Inner navCategories={navCategories}>{children}</Inner>
+      </CartProvider>
     </PincodeProvider>
   );
 }
@@ -33,6 +38,21 @@ function Inner({
   navCategories: Array<{ slug: string; name: string }>;
 }) {
   const [pincodeOpen, setPincodeOpen] = React.useState(false);
+  // Checkout routes get a minimalist shell — no header/footer/bottom-nav distraction.
+  // /checkout/* renders its own progress bar via the checkout layout.
+  const pathname = usePathname();
+  const isCheckout = pathname?.startsWith('/checkout') ?? false;
+
+  if (isCheckout) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <main className="flex-1">{children}</main>
+        <PincodeModal open={pincodeOpen} onOpenChange={setPincodeOpen} allowSkip />
+        <Toaster richColors position="top-right" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header navCategories={navCategories} onChangePincode={() => setPincodeOpen(true)} />
@@ -41,6 +61,7 @@ function Inner({
       <BottomNav />
       <PincodeModal open={pincodeOpen} onOpenChange={setPincodeOpen} allowSkip />
       <FirstVisitPincodePrompt />
+      <Toaster richColors position="top-right" />
     </div>
   );
 }

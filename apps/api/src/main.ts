@@ -6,7 +6,10 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // rawBody:true captures the unparsed request bytes on req.rawBody so the mock-payment
+  // webhook handler can verify its HMAC signature over the original body. Without this,
+  // express.json() consumes the stream before we can hash it.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
 
   const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? '')
