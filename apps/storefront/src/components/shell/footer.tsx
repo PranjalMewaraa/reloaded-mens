@@ -1,0 +1,85 @@
+import Link from 'next/link';
+import { MessageCircle } from 'lucide-react';
+import { env } from '@/lib/env';
+
+const SHOP_LINKS = [
+  { href: '/c/shirts', label: 'Shirts' },
+  { href: '/c/trousers', label: 'Trousers' },
+  { href: '/c/knitwear', label: 'Knitwear' },
+  { href: '/c/sale', label: 'Sale' },
+];
+
+const HELP_LINKS = [
+  { href: '/size-guide', label: 'Size guide' },
+  { href: '/shipping', label: 'Shipping' },
+  { href: '/returns', label: 'Returns & exchanges' },
+  { href: '/contact', label: 'Contact & WhatsApp' },
+];
+
+const LEGAL_LINKS = [
+  { href: '/terms', label: 'Terms' },
+  { href: '/privacy', label: 'Privacy' },
+];
+
+export function Footer() {
+  const whatsappHref = `https://wa.me/${env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/[^0-9]/g, '')}`;
+  return (
+    <footer className="mt-16 border-t border-ink-100 bg-bone">
+      <div className="mx-auto max-w-[1400px] px-5 py-12 md:px-8 md:py-16">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div>
+            <div className="font-display text-[28px] font-semibold tracking-tight text-ink-900">
+              {env.NEXT_PUBLIC_BRAND_NAME}.
+            </div>
+            <p className="mt-2 max-w-[36ch] text-[13px] leading-[1.6] text-ink-600">
+              Menswear made for everyday wear. Considered fabrics, honest pricing, shipped from
+              Bengaluru.
+            </p>
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener"
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-whatsapp px-4 py-3 text-snow shadow-soft hover:opacity-90"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-[13px] font-medium">Talk to a stylist on WhatsApp</span>
+            </a>
+            <p className="mt-2 text-[11.5px] text-ink-500">10am–8pm IST</p>
+          </div>
+
+          <FooterColumn label="Shop" links={SHOP_LINKS} />
+          <FooterColumn label="Help" links={HELP_LINKS} />
+          <FooterColumn label="The fine print" links={LEGAL_LINKS} />
+        </div>
+
+        <div className="mt-12 flex flex-col gap-2 border-t border-ink-100 pt-6 text-[11.5px] text-ink-500 md:flex-row md:items-center md:justify-between">
+          <span>© {new Date().getFullYear()} {env.NEXT_PUBLIC_BRAND_NAME}. All rights reserved.</span>
+          <span className="font-mono uppercase tracking-caps">Made in India</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function FooterColumn({
+  label,
+  links,
+}: {
+  label: string;
+  links: Array<{ href: string; label: string }>;
+}) {
+  return (
+    <div>
+      <div className="label-caps mb-3">{label}</div>
+      <ul className="flex flex-col gap-2 text-[13px] text-ink-700">
+        {links.map((l) => (
+          <li key={l.href}>
+            <Link href={l.href} className="hover:text-ink-900">
+              {l.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

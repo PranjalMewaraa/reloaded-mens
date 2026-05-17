@@ -1,0 +1,9 @@
+unzip menswear-monorepo.zip
+cd menswear-monorepo
+cp .env.example .env
+pnpm install
+pnpm docker:up          # starts Postgres + Redis
+pnpm db:generate
+pnpm db:migrate         # name the migration "initial" when prompted
+pnpm db:seed
+pnpm dev                # all three apps in parallel

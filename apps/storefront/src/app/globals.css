@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * MOOL storefront tokens — customer-facing variant of the same scale used in the admin.
+ * Mapped through shadcn CSS variables so any shadcn-style primitive we copy over Just Works.
+ * No dark mode at launch — every var resolves to a single value.
+ */
+@layer base {
+  :root {
+    /* bone #F9FAFB — page background (warmer than admin's #F4F4F5) */
+    --background: 210 17% 98%;
+    /* ink-900 #0A0A0A — body text */
+    --foreground: 0 0% 4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    /* Primary: ink-900 for nav buttons, footer CTA, etc. */
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+
+    /* sand #F5F6F8 — secondary surface */
+    --secondary: 210 17% 96%;
+    --secondary-foreground: 0 0% 4%;
+
+    --accent: 240 5% 89%;
+    --accent-foreground: 0 0% 4%;
+
+    --muted: 210 17% 96%;
+    --muted-foreground: 240 4% 46%;
+
+    --destructive: 0 73% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 5% 90%;
+    --input: 240 5% 84%;
+    --ring: 0 0% 4%;
+
+    --radius: 16px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-bone text-ink-900 antialiased;
+  }
+}
+
+@layer components {
+  /* Mono caps label — section dividers, table headers, breadcrumbs. */
+  .label-caps {
+    @apply font-mono text-[10px] uppercase tracking-caps text-ink-400;
+  }
+
+  /* Hairline divider. */
+  .hairline {
+    @apply border-ink-100;
+  }
+
+  /* Skeleton shimmer for loading states. */
+  .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.ink.100') 0%,
+      theme('colors.ink.50') 50%,
+      theme('colors.ink.100') 100%
+    );
+    background-size: 600px 100%;
+    background-repeat: no-repeat;
+    animation: shimmer 1.6s linear infinite;
+    @apply rounded-md;
+  }
+}

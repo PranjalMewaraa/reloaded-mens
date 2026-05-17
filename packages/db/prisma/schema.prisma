@@ -1,0 +1,244 @@
+// Prisma schema for the menswear ecommerce platform.
+// Sprint 1 — admin auth + data foundations for catalog and inventory.
+// More entities added incrementally per sprint. See architecture_plan.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// Admin users — login to admin panel
+// =====================================================
+model AdminUser {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String // 'admin' | 'staff'
+  totpSecret    String?
+  totpEnabledAt DateTime?
+  lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  auditEvents AuditEvent[]
+
+  @@index([email])
+}
+
+// =====================================================
+// Audit log for all admin actions
+// =====================================================
+model AuditEvent {
+  id          String   @id @default(cuid())
+  adminUserId String?
+  eventType   String // 'admin.login.success', 'admin.totp.failure', 'product.create', etc.
+  resource    String? // 'product:abc123', 'order:xyz789'
+  payload     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId])
+  @@index([resource])
+  @@index([createdAt])
+}
+
+// =====================================================
+// Customers — auto-created on first order or OTP login
+// =====================================================
+model Customer {
+  id                         String    @id @default(cuid())
+  phone                      String    @unique // +91XXXXXXXXXX canonical
+  name                       String?
+  email                      String?
+  defaultBillingAddressId    String?
+  defaultShippingAddressId   String?
+  totalOrders                Int       @default(0)
+  totalRevenuePaisa          BigInt    @default(0)
+  tags                       String[]  @default([])
+  marketingConsentWhatsapp   Boolean   @default(false)
+  marketingConsentWhatsappAt DateTime?
+  marketingConsentSms        Boolean   @default(false)
+  marketingConsentSmsAt      DateTime?
+  marketingConsentEmail      Boolean   @default(false)
+  marketingConsentEmailAt    DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  deletedAt                  DateTime?
+
+  addresses Address[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+// =====================================================
+// Addresses — billing/shipping, linked to customer
+// =====================================================
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  phone      String // validated to +91XXXXXXXXXX at API boundary
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  pincode    String
+  country    String   @default("IN")
+  type       String // 'billing' | 'shipping' | 'both'
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([pincode])
+}
+
+// =====================================================
+// Categories — self-referencing tree
+// =====================================================
+model Category {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  description    String?
+  parentId       String?
+  imageUrl       String?
+  sortOrder      Int       @default(0)
+  isActive       Boolean   @default(true)
+  seoTitle       String?
+  seoDescription String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  parent           Category?         @relation("Subcategories", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Category[]        @relation("Subcategories")
+  productCategories ProductCategory[]
+
+  @@index([slug])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+// =====================================================
+// Products — shared envelope around variants
+// =====================================================
+model Product {
+  id                  String    @id @default(cuid())
+  slug                String    @unique
+  name                String
+  description         String?
+  hsnCode             String?
+  // GST rate as whole percent (5, 12, 18, 28). Migrate to basis points if half-percents ever appear.
+  gstRatePercent      Int?
+  // 'online_shippable' | 'in_store_only' | 'both' — mirrors AVAILABILITY enum in @repo/types
+  availabilityFlag    String    @default("online_shippable")
+  basePricePaisa      Int
+  compareAtPricePaisa Int? // MRP
+  costPricePaisa      Int? // admin-only visibility
+  isActive            Boolean   @default(true)
+  isReturnable        Boolean   @default(true)
+  // Array of { url, alt, sortOrder }
+  images              Json      @default("[]")
+  seoTitle            String?
+  seoDescription      String?
+  ogImageUrl          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  variants          ProductVariant[]
+  productCategories ProductCategory[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+// =====================================================
+// Product <-> Category join
+// =====================================================
+model ProductCategory {
+  productId  String
+  categoryId String
+  sortOrder  Int    @default(0)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@index([categoryId, sortOrder])
+}
+
+// =====================================================
+// Product variants — unit of inventory
+// =====================================================
+model ProductVariant {
+  id                  String    @id @default(cuid())
+  productId           String
+  sku                 String    @unique
+  size                String?
+  color               String?
+  priceOverridePaisa  Int? // null -> falls back to product basePricePaisa
+  stockCount          Int       @default(0)
+  reservedForExchange Int       @default(0)
+  lowStockThreshold   Int       @default(3)
+  barcode             String?
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryEvents InventoryEvent[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([deletedAt])
+}
+
+// =====================================================
+// Inventory audit log — every stock change writes a row
+// =====================================================
+model InventoryEvent {
+  id           String   @id @default(cuid())
+  variantId    String
+  // 'store_sale' | 'online_order' | 'restock' | 'return_restock' | 'correction' | 'write_off'
+  changeType   String
+  delta        Int // signed
+  stockBefore  Int
+  stockAfter   Int
+  actor        String // 'system' | 'customer' | 'staff' | 'admin'
+  actorId      String?
+  referenceId  String? // e.g. order id, return id
+  note         String?
+  createdAt    DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([variantId, createdAt])
+  @@index([changeType])
+}
+
+// =====================================================
+// Site-wide settings (key-value, admin-editable)
+// =====================================================
+model Setting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
