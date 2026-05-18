@@ -48,9 +48,14 @@ coverage/
 pgdata/
 redisdata/
 
-# Uploads (local dev only — real uploads go to R2/S3)
-uploads/
-storage/
+# Uploads (local dev only — real uploads go to R2/S3).
+# Anchored to specific runtime paths so we don't swallow source
+# directories named storage/ or uploads/ (apps/api/src/storage,
+# apps/api/src/uploads, apps/storefront/src/app/checkout/checkout-storage.ts).
+/uploads/
+/storage/
+apps/api/uploads/
+apps/api/storage/
 
 # Prisma
 **/prisma/migrations/dev.db*
