@@ -27,11 +27,13 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      // Load from the repo root .env so every app shares the same env file.
-      envFilePath: ['../../.env', '.env'],
-    }),
+ConfigModule.forRoot({
+  isGlobal: true,
+  // In production (docker), env vars come from container env via docker-compose env_file.
+  // In dev, load from repo-root .env.
+  envFilePath: process.env.NODE_ENV === 'production' ? [] : ['../../.env', '.env'],
+  ignoreEnvFile: process.env.NODE_ENV === 'production',
+}),
     // Public file serving for LocalStorageProvider. Mounted at /files (outside the
     // /api/v1 global prefix — see main.ts setGlobalPrefix exclude).
     ServeStaticModule.forRoot({
