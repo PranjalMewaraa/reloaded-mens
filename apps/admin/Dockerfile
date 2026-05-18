@@ -39,6 +39,21 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # Admin reads @repo/db directly in Server Components — the Prisma client must
 # exist before `next build` traces its types.
 RUN pnpm --filter @repo/db exec prisma generate
+
+# NEXT_PUBLIC_* env vars are inlined into the admin bundle at build time
+# (not read at runtime). Receive them as build args from docker-build-push and
+# promote each to ENV so Next picks them up. Mismatched URLs here = the admin
+# UI calls localhost:4000 in production. NEXT_PUBLIC_STOREFRONT_URL is used by
+# admin to build "Open customer tracking link" buttons on the order detail
+# page — without it those links 404. See the GHA workflow for the values it
+# passes.
+ARG NEXT_PUBLIC_ADMIN_API_URL
+ARG NEXT_PUBLIC_ADMIN_URL
+ARG NEXT_PUBLIC_STOREFRONT_URL
+ENV NEXT_PUBLIC_ADMIN_API_URL=${NEXT_PUBLIC_ADMIN_API_URL}
+ENV NEXT_PUBLIC_ADMIN_URL=${NEXT_PUBLIC_ADMIN_URL}
+ENV NEXT_PUBLIC_STOREFRONT_URL=${NEXT_PUBLIC_STOREFRONT_URL}
+
 # Bump V8 heap so Next's webpack + file-tracing doesn't OOM on the default
 # ~1.5 GB heap inside the Docker build sandbox.
 ENV NODE_OPTIONS="--max-old-space-size=4096"
