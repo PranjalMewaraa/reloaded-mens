@@ -78,6 +78,22 @@ jobs:
           # GHA cache backend — fast incremental builds across runs.
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,scope=${{ matrix.app }},mode=max
+          # NEXT_PUBLIC_* are inlined into the Next.js bundles at BUILD time
+          # (not read at runtime — that's the whole point of the NEXT_PUBLIC_
+          # prefix). The api image ignores these args; the storefront +
+          # admin Dockerfiles declare matching ARG blocks that promote each
+          # to ENV before `next build` runs.
+          #
+          # If these values drift from the runtime .env on the VPS the apps
+          # will silently call the wrong origin. Keep these in sync with
+          # deploy/.env.production.example.
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.reloadedmens.in
+            NEXT_PUBLIC_STOREFRONT_URL=https://reloadedmens.in
+            NEXT_PUBLIC_ADMIN_API_URL=https://api.reloadedmens.in
+            NEXT_PUBLIC_ADMIN_URL=https://admin.reloadedmens.in
+            NEXT_PUBLIC_BRAND_NAME=Reloaded Menswear
+            NEXT_PUBLIC_WHATSAPP_NUMBER=+919958247377
 
       - name: Write deploy summary
         run: |

@@ -53,6 +53,21 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # turbo's `^build` graph may pull packages/db, and a missing client breaks
 # parallel typechecks on a cold build. Generate is cheap (<5 s).
 RUN pnpm --filter @repo/db exec prisma generate
+
+# NEXT_PUBLIC_* env vars are inlined into the storefront bundle at build time
+# (not read at runtime). Receive them as build args from docker-build-push and
+# promote each to ENV so Next picks them up. Mismatched URLs here = the
+# storefront calls localhost:4000 in production. See the GHA workflow for the
+# values it passes.
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_STOREFRONT_URL
+ARG NEXT_PUBLIC_BRAND_NAME
+ARG NEXT_PUBLIC_WHATSAPP_NUMBER
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_STOREFRONT_URL=${NEXT_PUBLIC_STOREFRONT_URL}
+ENV NEXT_PUBLIC_BRAND_NAME=${NEXT_PUBLIC_BRAND_NAME}
+ENV NEXT_PUBLIC_WHATSAPP_NUMBER=${NEXT_PUBLIC_WHATSAPP_NUMBER}
+
 # Bump V8 heap so Next's webpack + file-tracing doesn't OOM on the default
 # ~1.5 GB heap inside the Docker build sandbox.
 ENV NODE_OPTIONS="--max-old-space-size=4096"
