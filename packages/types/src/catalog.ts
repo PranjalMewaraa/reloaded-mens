@@ -91,6 +91,24 @@ export const availabilityFlagSchema = z.enum([
 // constrains it to the canonical {0,5,12,18,28}.
 const gstRateSchema = z.number().int().min(0).max(50);
 
+// Inline variant shape for the embedded-create case. Mirrors createVariantSchema
+// further down — duplicated here so createProductSchema doesn't have to reach
+// forward for a const that isn't initialised yet.
+const embeddedVariantSchema = z.object({
+  sku: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/, 'SKU must be uppercase letters/digits with hyphens'),
+  size: z.string().max(40).nullish(),
+  color: z.string().max(40).nullish(),
+  priceOverridePaisa: paisaSchema.nullish(),
+  stockCount: z.number().int().nonnegative().default(0),
+  lowStockThreshold: z.number().int().nonnegative().default(3),
+  barcode: z.string().max(64).nullish(),
+  isActive: z.boolean().default(true),
+});
+
 export const createProductSchema = z.object({
   slug: slugSchema,
   name: z.string().min(1).max(200),
@@ -106,12 +124,24 @@ export const createProductSchema = z.object({
   seoTitle: z.string().max(120).nullish(),
   seoDescription: z.string().max(320).nullish(),
   ogImageUrl: z.string().url().nullish(),
+  // Sprint 9 simplification — optional embedded variants + categories so a
+  // single POST /products can spin up an entire SKU-ready product in one round
+  // trip (used by CSV import + quick-add flows). When omitted, behaviour is
+  // unchanged from Sprint 2 (product created with no variants).
+  variants: z.array(embeddedVariantSchema).max(200).optional(),
+  categoryIds: z.array(z.string()).max(50).optional(),
 });
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 
-export const updateProductSchema = createProductSchema.partial().extend({
-  images: z.array(productImageSchema).optional(),
-});
+// Update path never accepts variants/categoryIds — those have dedicated routes
+// (POST /products/:id/variants and PUT /products/:id/categories). Strip them
+// before partial-ing so PATCH /products/:id has a tight contract.
+export const updateProductSchema = createProductSchema
+  .omit({ variants: true, categoryIds: true })
+  .partial()
+  .extend({
+    images: z.array(productImageSchema).optional(),
+  });
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 
 export const productListQuerySchema = z.object({
@@ -204,14 +234,31 @@ export const stockAdjustSchema = z.object({
 });
 export type StockAdjustInput = z.infer<typeof stockAdjustSchema>;
 
+export const inventoryStockFilterSchema = z.enum(['all', 'in_stock', 'low', 'out']);
+export type InventoryStockFilter = z.infer<typeof inventoryStockFilterSchema>;
+
+export const inventorySortSchema = z.enum([
+  'updated_desc',
+  'lowest_stock',
+  'name_asc',
+  'sku_asc',
+]);
+export type InventorySort = z.infer<typeof inventorySortSchema>;
+
 export const inventoryListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   q: z.string().trim().min(1).max(200).optional(),
+  // Sprint 9 Phase 3b — explicit stock filter chip. `lowStockOnly` stays for
+  // backwards compatibility; if both are present, `stockFilter` wins.
+  stockFilter: inventoryStockFilterSchema.optional(),
   lowStockOnly: z
     .union([z.literal('true'), z.literal('false'), z.boolean()])
     .transform((v) => (typeof v === 'boolean' ? v : v === 'true'))
     .optional(),
+  // Sprint 9 Phase 3b — sort. Defaults to recently updated (existing behaviour)
+  // when omitted.
+  sort: inventorySortSchema.default('updated_desc'),
 });
 export type InventoryListQuery = z.infer<typeof inventoryListQuerySchema>;
 

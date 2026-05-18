@@ -1,6 +1,11 @@
+import type { InventorySort, InventoryStockFilter } from '@repo/types';
 import { api } from '@/lib/api';
 import { PageHeader } from '@/components/shell/page-header';
-import { InventoryList, type InventoryListItem } from './inventory-list';
+import {
+  InventoryList,
+  type InventoryAggregates,
+  type InventoryListItem,
+} from './inventory-list';
 
 export const metadata = { title: 'Inventory' };
 
@@ -9,6 +14,7 @@ interface InventoryResponse {
   page: number;
   limit: number;
   total: number;
+  aggregates: InventoryAggregates;
 }
 
 interface PageProps {
@@ -17,8 +23,18 @@ interface PageProps {
     limit?: string;
     q?: string;
     lowStockOnly?: string;
+    stockFilter?: string;
+    sort?: string;
   }>;
 }
+
+const VALID_FILTERS = new Set<InventoryStockFilter>(['all', 'in_stock', 'low', 'out']);
+const VALID_SORTS = new Set<InventorySort>([
+  'updated_desc',
+  'lowest_stock',
+  'name_asc',
+  'sku_asc',
+]);
 
 export default async function InventoryPage({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
@@ -27,16 +43,38 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   if (sp.limit) query.set('limit', sp.limit);
   if (sp.q) query.set('q', sp.q);
   if (sp.lowStockOnly) query.set('lowStockOnly', sp.lowStockOnly);
+  if (sp.stockFilter) query.set('stockFilter', sp.stockFilter);
+  if (sp.sort) query.set('sort', sp.sort);
   const qs = query.toString();
   const res = await api<InventoryResponse>(`/variants${qs ? `?${qs}` : ''}`);
-  const data = res.ok && res.body ? res.body : { items: [], page: 1, limit: 20, total: 0 };
+  const data =
+    res.ok && res.body
+      ? res.body
+      : {
+          items: [],
+          page: 1,
+          limit: 20,
+          total: 0,
+          aggregates: { total: 0, inStock: 0, low: 0, out: 0 },
+        };
+
+  const stockFilter: InventoryStockFilter = VALID_FILTERS.has(
+    sp.stockFilter as InventoryStockFilter,
+  )
+    ? (sp.stockFilter as InventoryStockFilter)
+    : sp.lowStockOnly === 'true'
+      ? 'low'
+      : 'all';
+  const sort: InventorySort = VALID_SORTS.has(sp.sort as InventorySort)
+    ? (sp.sort as InventorySort)
+    : 'updated_desc';
 
   return (
     <div className="mx-auto w-full max-w-[1280px]">
       <PageHeader
         breadcrumbs={[{ label: 'Operations' }, { label: 'Inventory' }]}
         title="Inventory"
-        description={`${data.total} variant${data.total === 1 ? '' : 's'} across the catalogue.`}
+        description={`${data.aggregates.total} variant${data.aggregates.total === 1 ? '' : 's'} across the catalogue.`}
       />
       <div className="px-5 py-5 md:px-8 md:py-6">
         <InventoryList
@@ -44,8 +82,10 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           page={data.page}
           limit={data.limit}
           total={data.total}
+          aggregates={data.aggregates}
           initialQuery={sp.q ?? ''}
-          initialLowStockOnly={sp.lowStockOnly === 'true'}
+          initialStockFilter={stockFilter}
+          initialSort={sort}
         />
       </div>
     </div>

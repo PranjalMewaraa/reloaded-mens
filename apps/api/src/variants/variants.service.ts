@@ -200,51 +200,112 @@ export class VariantsService {
   }
 
   // For the /inventory page — variants with a small product hop and last-event timestamp.
+  // Sprint 9 Phase 3b — returns stock-state aggregates alongside the list so the
+  // page can render the top stat row without a second round-trip. Supports the
+  // chip-filter (`all` / `in_stock` / `low` / `out`) and a small sort vocab.
   async listInventory(query: InventoryListQuery) {
-    const where: Prisma.ProductVariantWhereInput = { deletedAt: null };
+    const baseWhere: Prisma.ProductVariantWhereInput = { deletedAt: null };
     if (query.q) {
-      where.OR = [
+      baseWhere.OR = [
         { sku: { contains: query.q, mode: 'insensitive' } },
         { product: { name: { contains: query.q, mode: 'insensitive' } } },
       ];
     }
-    // "Low stock only" means stockCount <= lowStockThreshold. Prisma can't compare two
-    // columns in `where`, so we filter in memory after fetching candidates. Cheap for the
-    // catalogue sizes we expect; revisit with raw SQL if it ever matters.
-    const [total, rows] = await Promise.all([
-      prisma.productVariant.count({ where }),
+
+    // stockFilter wins over the legacy lowStockOnly flag when both are present.
+    const stockFilter: 'all' | 'in_stock' | 'low' | 'out' =
+      query.stockFilter ?? (query.lowStockOnly ? 'low' : 'all');
+
+    // 'out' is a single-column comparison so Prisma can do it natively. 'low'
+    // and 'in_stock' need stockCount vs lowStockThreshold which Prisma can't
+    // express in WHERE — those branches post-filter in memory below.
+    const where: Prisma.ProductVariantWhereInput = { ...baseWhere };
+    if (stockFilter === 'out') {
+      where.stockCount = { lte: 0 };
+    }
+
+    const orderBy: Prisma.ProductVariantOrderByWithRelationInput[] =
+      query.sort === 'lowest_stock'
+        ? [{ stockCount: 'asc' }, { updatedAt: 'desc' }]
+        : query.sort === 'name_asc'
+          ? [{ product: { name: 'asc' } }, { sku: 'asc' }]
+          : query.sort === 'sku_asc'
+            ? [{ sku: 'asc' }]
+            : [{ updatedAt: 'desc' }];
+
+    // Aggregates — describe the catalog scoped to the active search (if any)
+    // so the stat row reflects what the operator is looking at, regardless of
+    // which stock chip they've clicked.
+    const [aggTotal, aggOut, aggCandidates] = await Promise.all([
+      prisma.productVariant.count({ where: baseWhere }),
+      prisma.productVariant.count({ where: { ...baseWhere, stockCount: { lte: 0 } } }),
       prisma.productVariant.findMany({
-        where,
-        orderBy: [{ updatedAt: 'desc' }],
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-        include: {
-          product: { select: { id: true, name: true, slug: true } },
-          inventoryEvents: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { createdAt: true, changeType: true, delta: true },
-          },
-        },
+        where: { ...baseWhere, stockCount: { gt: 0 } },
+        select: { stockCount: true, lowStockThreshold: true },
       }),
     ]);
+    const aggLow = aggCandidates.filter((r) => r.stockCount <= r.lowStockThreshold).length;
+    const aggInStock = aggCandidates.length - aggLow;
+    const aggregates = {
+      total: aggTotal,
+      inStock: aggInStock,
+      low: aggLow,
+      out: aggOut,
+    };
 
-    const items = rows
-      .filter((r) => !query.lowStockOnly || r.stockCount <= r.lowStockThreshold)
-      .map((r) => ({
-        id: r.id,
-        sku: r.sku,
-        size: r.size,
-        color: r.color,
-        stockCount: r.stockCount,
-        lowStockThreshold: r.lowStockThreshold,
-        isActive: r.isActive,
-        product: r.product,
-        lastEvent: r.inventoryEvents[0] ?? null,
-        updatedAt: r.updatedAt,
-      }));
+    // Main fetch. When stockFilter requires post-filter we fetch the full set
+    // and slice in memory — catalogues are small enough (<5k variants) that
+    // this is fine. Revisit with raw SQL if it ever matters.
+    const needsPostFilter = stockFilter === 'low' || stockFilter === 'in_stock';
+    const include = {
+      product: { select: { id: true, name: true, slug: true } },
+      inventoryEvents: {
+        orderBy: { createdAt: 'desc' as const },
+        take: 1,
+        select: { createdAt: true, changeType: true, delta: true },
+      },
+    } satisfies Prisma.ProductVariantInclude;
 
-    return { items, page: query.page, limit: query.limit, total };
+    const [rawTotal, rows] = await Promise.all([
+      prisma.productVariant.count({ where }),
+      needsPostFilter
+        ? prisma.productVariant.findMany({ where, orderBy, include })
+        : prisma.productVariant.findMany({
+            where,
+            orderBy,
+            include,
+            skip: (query.page - 1) * query.limit,
+            take: query.limit,
+          }),
+    ]);
+
+    const filteredRows = needsPostFilter
+      ? rows.filter((r) =>
+          stockFilter === 'low'
+            ? r.stockCount > 0 && r.stockCount <= r.lowStockThreshold
+            : r.stockCount > r.lowStockThreshold,
+        )
+      : rows;
+
+    const total = needsPostFilter ? filteredRows.length : rawTotal;
+    const pageRows = needsPostFilter
+      ? filteredRows.slice((query.page - 1) * query.limit, query.page * query.limit)
+      : filteredRows;
+
+    const items = pageRows.map((r) => ({
+      id: r.id,
+      sku: r.sku,
+      size: r.size,
+      color: r.color,
+      stockCount: r.stockCount,
+      lowStockThreshold: r.lowStockThreshold,
+      isActive: r.isActive,
+      product: r.product,
+      lastEvent: r.inventoryEvents[0] ?? null,
+      updatedAt: r.updatedAt,
+    }));
+
+    return { items, page: query.page, limit: query.limit, total, aggregates };
   }
 
   private async ensureProductExists(productId: string): Promise<void> {

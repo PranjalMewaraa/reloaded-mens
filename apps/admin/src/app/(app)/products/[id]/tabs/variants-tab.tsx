@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ChipInput } from '@/components/ui/chip-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -55,6 +56,29 @@ export function VariantsTab({ productId, variants }: VariantsTabProps) {
   const [adjusting, setAdjusting] = React.useState<EditorVariant | null>(null);
   const [pending, startTransition] = React.useTransition();
 
+  // Phase 2a — inline stock entry. Matrix cells call back here with the
+  // new absolute stock count; we diff against current to write an
+  // InventoryEvent with a sensible default changeType. The legacy
+  // AdjustDrawer is still reachable from the "Adjust with note" link below
+  // for the audit-heavy path.
+  async function handleInlineStockSet(v: { id: string; stockCount: number }, next: number) {
+    const delta = next - v.stockCount;
+    if (delta === 0) return;
+    const changeType =
+      delta > 0 ? INVENTORY_CHANGE_TYPE.RESTOCK : INVENTORY_CHANGE_TYPE.CORRECTION;
+    const result = await adjustVariantStockAction(v.id, productId, {
+      delta,
+      changeType,
+    });
+    if (!result.ok) {
+      toast.error(result.error ?? 'Failed to update stock');
+      router.refresh(); // Re-sync so the cell snaps back to server truth.
+      return;
+    }
+    toast.success(`Stock set to ${next}`);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -71,12 +95,24 @@ export function VariantsTab({ productId, variants }: VariantsTabProps) {
               No variants yet. Generate the matrix with the size and colour axes you carry.
             </p>
           ) : (
-            <VariantMatrix
-              variants={variants}
-              onCellClick={(v) =>
-                setAdjusting(variants.find((x) => x.id === v.id) ?? null)
-              }
-            />
+            <>
+              <VariantMatrix
+                variants={variants}
+                onInlineStockSet={handleInlineStockSet}
+                onCellClick={(v) => setAdjusting(variants.find((x) => x.id === v.id) ?? null)}
+              />
+              <p className="mt-3 text-[11.5px] text-ink-500">
+                Tap a cell to set stock directly. For damage / correction notes,{' '}
+                <button
+                  type="button"
+                  onClick={() => setAdjusting(variants[0] ?? null)}
+                  className="text-ink-700 underline-offset-2 hover:underline"
+                >
+                  open the adjust drawer
+                </button>
+                .
+              </p>
+            </>
           )}
         </CardContent>
       </Card>
@@ -254,7 +290,16 @@ function VariantRow({
 
 // =====================================================
 // Matrix generator dialog
+//
+// Phase 2a — chip input + preset rows. Comma-separated text was painful on
+// mobile keyboards; chip input + preset taps gets sizes + colours in 3-4 taps.
+// Phase 2c — renders as a bottom sheet on mobile (slide-up), centered Dialog
+// on desktop. Same component switches at the `sm` breakpoint via the Sheet
+// vs Dialog primitive.
 // =====================================================
+
+const SIZE_PRESETS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', '34', '36', '38'];
+const COLOUR_PRESETS = ['Black', 'White', 'Natural', 'Olive', 'Navy', 'Brown', 'Beige', 'Charcoal'];
 
 function MatrixDialog({
   open,
@@ -267,35 +312,39 @@ function MatrixDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [sizes, setSizes] = React.useState('');
-  const [colors, setColors] = React.useState('');
+  const [sizes, setSizes] = React.useState<string[]>([]);
+  const [colors, setColors] = React.useState<string[]>([]);
   const [prefix, setPrefix] = React.useState('');
   const [stockCount, setStockCount] = React.useState('0');
   const [lowStockThreshold, setLowStockThreshold] = React.useState('3');
   const [pending, startTransition] = React.useTransition();
 
+  // Reset state every time the dialog reopens so a half-filled generate doesn't
+  // bleed across two products.
+  React.useEffect(() => {
+    if (open) {
+      setSizes([]);
+      setColors([]);
+      setPrefix('');
+      setStockCount('0');
+      setLowStockThreshold('3');
+    }
+  }, [open]);
+
   function submit() {
-    const sizeArr = sizes
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const colorArr = colors
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (sizeArr.length === 0 && colorArr.length === 0) {
-      toast.error('Provide sizes, colors, or both');
+    if (sizes.length === 0 && colors.length === 0) {
+      toast.error('Add at least one size or colour');
       return;
     }
-    if (!prefix) {
+    if (!prefix.trim()) {
       toast.error('SKU prefix is required');
       return;
     }
     startTransition(async () => {
       const result = await createVariantMatrixAction(productId, {
         axes: {
-          ...(sizeArr.length > 0 ? { size: sizeArr } : {}),
-          ...(colorArr.length > 0 ? { color: colorArr } : {}),
+          ...(sizes.length > 0 ? { size: sizes } : {}),
+          ...(colors.length > 0 ? { color: colors } : {}),
         },
         skuPrefix: prefix.toUpperCase().replace(/[^A-Z0-9-]+/g, '-').replace(/-+/g, '-'),
         defaults: {
@@ -312,76 +361,124 @@ function MatrixDialog({
     });
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Generate variant matrix</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="m-sku">SKU prefix</Label>
-            <Input
-              id="m-sku"
-              value={prefix}
-              onChange={(e) => setPrefix(e.target.value)}
-              placeholder="RLD-CAMP"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="m-sizes">Sizes (comma separated)</Label>
-            <Input
-              id="m-sizes"
-              value={sizes}
-              onChange={(e) => setSizes(e.target.value)}
-              placeholder="S, M, L"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="m-colors">Colours (comma separated)</Label>
-            <Input
-              id="m-colors"
-              value={colors}
-              onChange={(e) => setColors(e.target.value)}
-              placeholder="Black, White"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="m-stock">Initial stock</Label>
-              <Input
-                id="m-stock"
-                value={stockCount}
-                onChange={(e) => setStockCount(e.target.value)}
-                type="number"
-                min="0"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="m-low">Low-stock threshold</Label>
-              <Input
-                id="m-low"
-                value={lowStockThreshold}
-                onChange={(e) => setLowStockThreshold(e.target.value)}
-                type="number"
-                min="0"
-              />
-            </div>
-          </div>
-          <p className="text-[12px] text-ink-500">
-            Skips any (size, colour) pair already on this product — safe to re-run.
-          </p>
+  const totalCells = Math.max(sizes.length, 1) * Math.max(colors.length, 1);
+
+  const body = (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="m-sku">SKU prefix</Label>
+        <Input
+          id="m-sku"
+          value={prefix}
+          onChange={(e) => setPrefix(e.target.value)}
+          placeholder="RLD-CAMP"
+          autoCapitalize="characters"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="font-mono uppercase tracking-caps"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Sizes</Label>
+        <ChipInput
+          values={sizes}
+          onChange={setSizes}
+          presets={SIZE_PRESETS}
+          normalize={(t) => t.toUpperCase().trim()}
+          placeholder="Type and press Enter"
+          autoCapitalize="characters"
+          ariaLabel="Sizes"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Colours</Label>
+        <ChipInput
+          values={colors}
+          onChange={setColors}
+          presets={COLOUR_PRESETS}
+          normalize={(t) => t.trim().replace(/\b\w/g, (c) => c.toUpperCase())}
+          placeholder="Type and press Enter"
+          autoCapitalize="words"
+          ariaLabel="Colours"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="m-stock">Initial stock</Label>
+          <Input
+            id="m-stock"
+            value={stockCount}
+            onChange={(e) => setStockCount(e.target.value)}
+            type="number"
+            inputMode="numeric"
+            min="0"
+          />
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={pending}>
-            {pending ? 'Generating…' : 'Generate'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <Label htmlFor="m-low">Low-stock threshold</Label>
+          <Input
+            id="m-low"
+            value={lowStockThreshold}
+            onChange={(e) => setLowStockThreshold(e.target.value)}
+            type="number"
+            inputMode="numeric"
+            min="0"
+          />
+        </div>
+      </div>
+      <p className="text-[12px] text-ink-500">
+        Will create {totalCells} variant{totalCells === 1 ? '' : 's'}. Skips any (size, colour) pair
+        already on this product — safe to re-run.
+      </p>
+    </div>
+  );
+
+  const footer = (
+    <>
+      <Button variant="ghost" onClick={onClose} disabled={pending}>
+        Cancel
+      </Button>
+      <Button onClick={submit} disabled={pending}>
+        {pending ? 'Generating…' : 'Generate'}
+      </Button>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop — centered dialog */}
+      <div className="hidden sm:block">
+        <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Generate variant matrix</DialogTitle>
+            </DialogHeader>
+            {body}
+            <DialogFooter>{footer}</DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Mobile — bottom sheet (slide up). Sheet primitive's `bottom` side
+          gives us the iOS-native feel without inventing a new modal type. */}
+      <div className="sm:hidden">
+        <Sheet open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
+          <SheetContent
+            side="bottom"
+            className="flex max-h-[90vh] flex-col rounded-t-2xl p-0 [&>button]:hidden"
+          >
+            <SheetHeader className="border-b border-ink-100 px-5 py-3">
+              <SheetTitle>Generate variant matrix</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto px-5 py-4">{body}</div>
+            <SheetFooter className="border-t border-ink-100 px-5 py-3 pb-[max(theme(spacing.3),env(safe-area-inset-bottom))]">
+              {footer}
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
 

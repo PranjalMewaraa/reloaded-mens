@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
@@ -87,6 +88,20 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
         <ChevronRight className="h-3 w-3 text-ink-300" aria-hidden />
         <span className="text-ink-900">{category.name}</span>
       </nav>
+
+      {category.imageUrl ? (
+        <div className="relative mx-5 mt-2 aspect-[16/5] overflow-hidden rounded-2xl bg-ink-50 md:mx-8 md:aspect-[21/6]">
+          <Image
+            src={category.imageUrl}
+            alt={category.name}
+            fill
+            sizes="(min-width: 768px) 90vw, 100vw"
+            className="object-cover"
+            priority
+            unoptimized
+          />
+        </div>
+      ) : null}
 
       <header className="px-5 py-4 md:px-8 md:py-6">
         <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink-900 md:text-[36px]">

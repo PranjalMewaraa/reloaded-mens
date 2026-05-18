@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { TreeView, type TreeReorderUpdate } from '@/components/ui/tree-view';
+import { uploadImageFile } from '@/lib/upload';
 import {
   createCategoryAction,
   deleteCategoryAction,
@@ -176,6 +178,7 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
   const initialSeoTitle = mode.kind === 'edit' ? mode.node.seoTitle ?? '' : '';
   const initialSeoDescription = mode.kind === 'edit' ? mode.node.seoDescription ?? '' : '';
   const initialActive = mode.kind === 'edit' ? mode.node.isActive : true;
+  const initialImageUrl = mode.kind === 'edit' ? mode.node.imageUrl ?? '' : '';
 
   const [name, setName] = React.useState(initialName);
   const [slug, setSlug] = React.useState(initialSlug);
@@ -185,6 +188,8 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
   const [seoTitle, setSeoTitle] = React.useState(initialSeoTitle);
   const [seoDescription, setSeoDescription] = React.useState(initialSeoDescription);
   const [isActive, setIsActive] = React.useState(initialActive);
+  const [imageUrl, setImageUrl] = React.useState(initialImageUrl);
+  const [uploading, setUploading] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
   // Reset form fields when the mode changes (open with new node / close).
@@ -197,7 +202,21 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
     setSeoTitle(initialSeoTitle);
     setSeoDescription(initialSeoDescription);
     setIsActive(initialActive);
+    setImageUrl(initialImageUrl);
   }, [mode]);
+
+  async function handleImageFile(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { url } = await uploadImageFile(file);
+      setImageUrl(url);
+    } catch (err) {
+      toast.error((err as Error).message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function handleNameChange(v: string) {
     setName(v);
@@ -211,6 +230,7 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
       name,
       description: description.trim() ? description : null,
       parentId: parentId || null,
+      imageUrl: imageUrl.trim() ? imageUrl : null,
       seoTitle: seoTitle.trim() ? seoTitle : null,
       seoDescription: seoDescription.trim() ? seoDescription : null,
       isActive,
@@ -311,6 +331,51 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
                 placeholder="Optional"
               />
             </div>
+
+            {/* Sprint 9 — category banner image. Renders at the top of the
+                /c/<slug> page on the storefront. Drop one file at a time;
+                preview shows current selection with a quick-remove. */}
+            <div className="space-y-1.5">
+              <Label>Image</Label>
+              {imageUrl ? (
+                <div className="relative aspect-[3/1] overflow-hidden rounded-xl border border-ink-100 bg-ink-50">
+                  <Image
+                    src={imageUrl}
+                    alt={name || 'Category image'}
+                    fill
+                    sizes="(min-width: 640px) 28rem, 90vw"
+                    className="object-cover"
+                    unoptimized
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-snow/90 text-ink-900 shadow-soft-sm hover:bg-snow"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-200 bg-snow p-5 text-center text-[12.5px] text-ink-500 hover:border-ink-900 hover:text-ink-900 ${
+                    uploading ? 'opacity-50' : ''
+                  }`}
+                >
+                  <Upload className="h-5 w-5" />
+                  <span>{uploading ? 'Uploading…' : 'Click to upload a banner'}</span>
+                  <span className="font-mono text-[10.5px] text-ink-400">JPEG / PNG / WebP · up to 5 MB</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleImageFile(e.target.files?.[0])}
+                    disabled={uploading}
+                  />
+                </label>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="cat-seo-title">SEO title</Label>
               <Input

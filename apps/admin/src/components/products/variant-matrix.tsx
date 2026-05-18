@@ -16,18 +16,27 @@ export interface VariantRow {
 
 interface VariantMatrixProps {
   variants: VariantRow[];
+  // Open the full Adjust drawer (legacy / power path). Wired from the per-row
+  // "Adjust with note" link.
   onCellClick?: (variant: VariantRow) => void;
+  // Sprint 9 Phase 2a — inline numeric entry. When provided, cells render as
+  // <input> instead of <button>; blur or Enter commits the new value. Caller
+  // diffs against current stock + writes the InventoryEvent under the hood.
+  // Falls back to onCellClick when not provided.
+  onInlineStockSet?: (variant: VariantRow, newStockCount: number) => void;
 }
 
 // Visual matrix of variants: rows = color, cols = size. MOOL pattern (design doc §10).
-// Cell colour-codes stock state per MOOL §11. Click a cell to open the adjust drawer
-// (caller supplies onCellClick). Falls back to a flat list if there's no size or color
-// axis.
-export function VariantMatrix({ variants, onCellClick }: VariantMatrixProps) {
+// Cell colour-codes stock state per MOOL §11. When `onInlineStockSet` is supplied,
+// each cell is an inline numeric input committing on blur/Enter; otherwise the
+// legacy button-opens-drawer behaviour kicks in.
+export function VariantMatrix({ variants, onCellClick, onInlineStockSet }: VariantMatrixProps) {
   const { sizes, colors, cellMap } = React.useMemo(() => deriveAxes(variants), [variants]);
 
   if (sizes.length === 0 && colors.length === 0) {
-    return <FlatList variants={variants} onCellClick={onCellClick} />;
+    return (
+      <FlatList variants={variants} onCellClick={onCellClick} onInlineStockSet={onInlineStockSet} />
+    );
   }
 
   return (
@@ -64,19 +73,12 @@ export function VariantMatrix({ variants, onCellClick }: VariantMatrixProps) {
               {sizes.map((s) => {
                 const v = cellMap.get(cellKey(s, c));
                 return (
-                  <button
+                  <StockCell
                     key={`c-${s ?? 'none'}-${c ?? 'none'}`}
-                    type="button"
-                    onClick={() => v && onCellClick?.(v)}
-                    className={cn(
-                      'flex h-10 items-center justify-center rounded-md border font-mono text-[12.5px] transition',
-                      cellTone(v),
-                      v ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed',
-                    )}
-                    disabled={!v}
-                  >
-                    {v ? v.stockCount : '—'}
-                  </button>
+                    variant={v}
+                    onCellClick={onCellClick}
+                    onInlineStockSet={onInlineStockSet}
+                  />
                 );
               })}
             </React.Fragment>
@@ -116,16 +118,12 @@ export function VariantMatrix({ variants, onCellClick }: VariantMatrixProps) {
                     <span className="flex-1 truncate font-mono text-[11.5px] text-ink-500">
                       {v.sku}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => onCellClick?.(v)}
-                      className={cn(
-                        'flex h-9 w-16 items-center justify-center rounded-md border font-mono text-[12.5px]',
-                        cellTone(v),
-                      )}
-                    >
-                      {v.stockCount}
-                    </button>
+                    <StockCell
+                      variant={v}
+                      onCellClick={onCellClick}
+                      onInlineStockSet={onInlineStockSet}
+                      className="h-10 w-20"
+                    />
                   </li>
                 );
               })}
@@ -137,24 +135,141 @@ export function VariantMatrix({ variants, onCellClick }: VariantMatrixProps) {
   );
 }
 
-function FlatList({ variants, onCellClick }: VariantMatrixProps) {
+function FlatList({ variants, onCellClick, onInlineStockSet }: VariantMatrixProps) {
   return (
     <div className="space-y-2">
       {variants.map((v) => (
-        <button
+        <div
           key={v.id}
-          type="button"
-          onClick={() => onCellClick?.(v)}
-          className={cn(
-            'flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left',
-            cellTone(v),
-          )}
+          className="flex w-full items-center justify-between gap-3 rounded-xl border border-ink-100 bg-snow px-3 py-2.5"
         >
           <span className="font-mono text-[12.5px] text-ink-900">{v.sku}</span>
-          <span className="font-mono text-[12.5px]">{v.stockCount}</span>
-        </button>
+          <StockCell variant={v} onCellClick={onCellClick} onInlineStockSet={onInlineStockSet} />
+        </div>
       ))}
     </div>
+  );
+}
+
+// =====================================================
+// StockCell — the colored cell that renders inside both the desktop grid and
+// the mobile accordion. Two modes:
+//   - inline:  shows an <input> bound to local state; commits via
+//              onInlineStockSet on blur or Enter. Designed for thumb-driven
+//              first-time stock entry.
+//   - legacy:  shows a <button> that fires onCellClick (the existing
+//              AdjustDrawer path). Kept so the per-row "Adjust with note" link
+//              still works for audit-heavy ops.
+// Both modes use the same cellTone() palette so the look is consistent.
+// =====================================================
+
+function StockCell({
+  variant,
+  onCellClick,
+  onInlineStockSet,
+  className,
+}: {
+  variant: VariantRow | undefined;
+  onCellClick?: (variant: VariantRow) => void;
+  onInlineStockSet?: (variant: VariantRow, newStockCount: number) => void;
+  className?: string;
+}) {
+  // Empty cell — the (size, color) pair has no matching variant. Just render a
+  // disabled placeholder.
+  if (!variant) {
+    return (
+      <span
+        className={cn(
+          'flex h-10 items-center justify-center rounded-md border font-mono text-[12.5px]',
+          cellTone(undefined),
+          className,
+        )}
+      >
+        —
+      </span>
+    );
+  }
+
+  if (onInlineStockSet) {
+    return (
+      <InlineStockInput
+        variant={variant}
+        onCommit={(next) => onInlineStockSet(variant, next)}
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onCellClick?.(variant)}
+      className={cn(
+        'flex h-10 items-center justify-center rounded-md border font-mono text-[12.5px] transition',
+        cellTone(variant),
+        'cursor-pointer hover:opacity-80',
+        className,
+      )}
+    >
+      {variant.stockCount}
+    </button>
+  );
+}
+
+function InlineStockInput({
+  variant,
+  onCommit,
+  className,
+}: {
+  variant: VariantRow;
+  onCommit: (next: number) => void;
+  className?: string;
+}) {
+  // Local mirror — keeps the input responsive while parent state hasn't refreshed yet.
+  // Re-sync when the variant's stockCount changes (e.g. after parent refresh).
+  const [value, setValue] = React.useState(String(variant.stockCount));
+  React.useEffect(() => {
+    setValue(String(variant.stockCount));
+  }, [variant.stockCount]);
+
+  function commit() {
+    const next = Number.parseInt(value, 10);
+    if (!Number.isFinite(next) || next < 0) {
+      setValue(String(variant.stockCount));
+      return;
+    }
+    if (next === variant.stockCount) return;
+    onCommit(next);
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      min={0}
+      step={1}
+      value={value}
+      onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ''))}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          (e.currentTarget as HTMLInputElement).blur();
+        } else if (e.key === 'Escape') {
+          setValue(String(variant.stockCount));
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+      onFocus={(e) => e.currentTarget.select()}
+      aria-label={`Stock for ${variant.sku}`}
+      className={cn(
+        'h-10 w-16 rounded-md border text-center font-mono text-[12.5px] outline-none transition',
+        'focus:ring-2 focus:ring-ink-900',
+        cellTone(variant),
+        className,
+      )}
+    />
   );
 }
 

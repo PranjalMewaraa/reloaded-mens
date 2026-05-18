@@ -21,7 +21,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Star, Trash2, Upload } from 'lucide-react';
+import { Camera, GripVertical, Loader2, Star, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ProductImage } from '@repo/types';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,14 @@ import { Pill } from '@/components/ui/pill';
 import { uploadImageFile } from '@/lib/upload';
 import { cn } from '@/lib/utils';
 
+// Phase 2a (mobile): per-file pending preview while uploads are in flight,
+// shown alongside committed thumbs with a spinner overlay.
+interface PendingImage {
+  tempId: string;
+  previewUrl: string;
+  fileName: string;
+}
+
 interface ImageGalleryProps {
   images: ProductImage[];
   onChange: (next: ProductImage[]) => void;
@@ -38,7 +46,11 @@ interface ImageGalleryProps {
 
 export function ImageGallery({ images, onChange }: ImageGalleryProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const [uploading, setUploading] = React.useState(false);
+  // Pending state per in-flight file. Object URLs are revoked when the upload
+  // settles so we don't leak blobs.
+  const [pending, setPending] = React.useState<PendingImage[]>([]);
+  const pickerRef = React.useRef<HTMLInputElement | null>(null);
+  const cameraRef = React.useRef<HTMLInputElement | null>(null);
 
   // Always render in sortOrder (and normalise on every change).
   const sorted = React.useMemo(
@@ -60,27 +72,76 @@ export function ImageGallery({ images, onChange }: ImageGalleryProps) {
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    setUploading(true);
-    try {
-      const startSort = sorted.length;
-      const added: ProductImage[] = [];
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
+
+    // Stamp each incoming file with a temp id + object URL preview so the UI
+    // shows the photo immediately, then upload in parallel.
+    const list = Array.from(files);
+    const items: Array<PendingImage & { file: File }> = list.map((file, i) => ({
+      tempId: `pending-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      previewUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      file,
+    }));
+    setPending((prev) => [...prev, ...items.map(({ file: _f, ...p }) => p)]);
+
+    // Run them concurrently. allSettled so one failure doesn't kill the batch.
+    const results = await Promise.allSettled(
+      items.map(async (item) => {
         try {
-          const { url } = await uploadImageFile(file);
-          added.push({ url, alt: '', sortOrder: startSort + i });
+          const { url } = await uploadImageFile(item.file);
+          return { ok: true as const, tempId: item.tempId, url };
         } catch (err) {
-          toast.error(`${file.name}: ${(err as Error).message}`);
+          throw { tempId: item.tempId, fileName: item.fileName, error: (err as Error).message };
         }
+      }),
+    );
+
+    // Collect new ProductImages in original drop order so the gallery sort
+    // reflects the operator's chosen order.
+    const startSort = sorted.length;
+    const successById = new Map<string, string>();
+    let failed = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.ok) {
+        successById.set(r.value.tempId, r.value.url);
+      } else if (r.status === 'rejected') {
+        const reason = r.reason as { fileName: string; error: string };
+        failed += 1;
+        toast.error(`${reason.fileName}: ${reason.error}`);
       }
-      if (added.length > 0) {
-        emit([...sorted, ...added]);
+    }
+
+    if (successById.size > 0) {
+      const added: ProductImage[] = items
+        .map((item, i) => {
+          const url = successById.get(item.tempId);
+          if (!url) return null;
+          return { url, alt: '', sortOrder: startSort + i };
+        })
+        .filter((x): x is ProductImage => x !== null);
+      emit([...sorted, ...added]);
+      if (failed === 0) {
         toast.success(`${added.length} image${added.length === 1 ? '' : 's'} uploaded`);
       }
-    } finally {
-      setUploading(false);
     }
+
+    // Drop the pending previews + revoke their object URLs.
+    setPending((prev) => {
+      const matchIds = new Set(items.map((i) => i.tempId));
+      prev.filter((p) => matchIds.has(p.tempId)).forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      return prev.filter((p) => !matchIds.has(p.tempId));
+    });
   }
+
+  // Revoke any leftover object URLs on unmount (e.g. operator navigates away
+  // mid-upload).
+  React.useEffect(() => {
+    return () => {
+      pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+    // eslint disabled — we deliberately want cleanup-on-unmount only.
+
+  }, []);
 
   function makePrimary(url: string) {
     const idx = sorted.findIndex((i) => i.url === url);
@@ -99,20 +160,20 @@ export function ImageGallery({ images, onChange }: ImageGalleryProps) {
     emit(sorted.filter((i) => i.url !== url));
   }
 
+  // Combined render list: real images + in-flight pending previews.
+  const hasContent = sorted.length > 0 || pending.length > 0;
+
   return (
     <div className="space-y-3">
-      {sorted.length === 0 ? (
+      {!hasContent ? (
         <EmptyState
           icon={<Upload className="h-7 w-7" />}
           title="No images yet"
-          description="Drop or pick files below. JPEG, PNG, or WebP, up to 5 MB each."
+          description="Take a photo or pick from your gallery. JPEG, PNG, or WebP, up to 5 MB each."
         />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={sorted.map((i) => i.url)}
-            strategy={rectSortingStrategy}
-          >
+          <SortableContext items={sorted.map((i) => i.url)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {sorted.map((img, idx) => (
                 <SortableThumb
@@ -124,28 +185,85 @@ export function ImageGallery({ images, onChange }: ImageGalleryProps) {
                   onRemove={() => remove(img.url)}
                 />
               ))}
+              {pending.map((p) => (
+                <PendingThumb key={p.tempId} pending={p} />
+              ))}
             </div>
           </SortableContext>
         </DndContext>
       )}
 
-      <label
-        className={cn(
-          'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-ink-200 bg-snow p-6 text-center text-[13px] text-ink-500 transition hover:border-ink-900 hover:text-ink-900',
-          uploading ? 'opacity-50' : '',
-        )}
-      >
-        <Upload className="h-5 w-5" />
-        <span>{uploading ? 'Uploading…' : 'Click to upload or drop images here'}</span>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-          disabled={uploading}
+      {/* Mobile-friendly action row — Camera (rear camera) and Gallery split
+          so the operator goes straight to either source without poking the
+          OS-level picker twice. The hidden <input>s carry `multiple` so the
+          gallery pick can grab a whole shoot at once. */}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => cameraRef.current?.click()}
+        >
+          <Camera className="mr-2 h-4 w-4" />
+          Take photo
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => pickerRef.current?.click()}
+        >
+          <Upload className="mr-2 h-4 w-4" />
+          Pick from gallery
+        </Button>
+      </div>
+      <p className="text-center font-mono text-[10.5px] uppercase tracking-caps text-ink-500">
+        JPEG · PNG · WebP — up to 5 MB each
+      </p>
+
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          // Reset value so re-picking the same file fires onChange.
+          if (cameraRef.current) cameraRef.current.value = '';
+        }}
+      />
+      <input
+        ref={pickerRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          if (pickerRef.current) pickerRef.current.value = '';
+        }}
+      />
+    </div>
+  );
+}
+
+function PendingThumb({ pending }: { pending: PendingImage }) {
+  return (
+    <div className="group relative overflow-hidden rounded-md border border-ink-100 bg-snow">
+      <div className="relative aspect-square overflow-hidden bg-ink-50">
+        {/* Plain <img> intentional — pending.previewUrl is a blob: URL from
+            createObjectURL, which next/image refuses to optimise. */}
+        <img
+          src={pending.previewUrl}
+          alt={pending.fileName}
+          className="absolute inset-0 h-full w-full object-cover opacity-70"
         />
-      </label>
+        <div className="absolute inset-0 flex items-center justify-center bg-ink-900/20">
+          <Loader2 className="h-6 w-6 animate-spin text-snow" />
+        </div>
+      </div>
+      <div className="px-2 py-1.5 text-center font-mono text-[10.5px] text-ink-500">Uploading…</div>
     </div>
   );
 }
@@ -191,10 +309,10 @@ function SortableThumb({
           type="button"
           {...attributes}
           {...listeners}
-          className="absolute left-1.5 top-1.5 rounded-md bg-snow/90 p-1 text-ink-700 backdrop-blur-sm hover:text-ink-900"
+          className="absolute left-1.5 top-1.5 inline-flex h-8 w-8 items-center justify-center rounded-md bg-snow/90 text-ink-700 backdrop-blur-sm hover:text-ink-900 touch-none"
           aria-label="Drag to reorder"
         >
-          <GripVertical className="h-3.5 w-3.5" />
+          <GripVertical className="h-4 w-4" />
         </button>
         {isPrimary ? (
           <div className="absolute right-1.5 top-1.5">

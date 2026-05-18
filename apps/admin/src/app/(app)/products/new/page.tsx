@@ -1,183 +1,90 @@
-'use client';
-
-import * as React from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { redirect } from 'next/navigation';
 import { AVAILABILITY } from '@repo/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { PageHeader } from '@/components/shell/page-header';
-import { createProductAction } from '../actions';
+import { api } from '@/lib/api';
 
-const GST_RATES = [0, 5, 12, 18, 28] as const;
+export const metadata = { title: 'New product' };
 
-export default function NewProductPage() {
-  const router = useRouter();
-  const [name, setName] = React.useState('');
-  const [slug, setSlug] = React.useState('');
-  const [slugDirty, setSlugDirty] = React.useState(false);
-  const [basePriceRupees, setBasePriceRupees] = React.useState('');
-  const [gstRate, setGstRate] = React.useState<number>(12);
-  const [availability, setAvailability] = React.useState<string>(AVAILABILITY.ONLINE_SHIPPABLE);
-  const [pending, startTransition] = React.useTransition();
-
-  function handleNameChange(v: string) {
-    setName(v);
-    if (!slugDirty) setSlug(slugify(v));
-  }
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const paisa = Math.round(parseFloat(basePriceRupees || '0') * 100);
-    if (!Number.isFinite(paisa) || paisa < 0) {
-      toast.error('Enter a valid base price');
-      return;
-    }
-    startTransition(async () => {
-      const result = await createProductAction({
-        slug,
-        name,
-        basePricePaisa: paisa,
-        gstRatePercent: gstRate,
-        availabilityFlag: availability as (typeof AVAILABILITY)[keyof typeof AVAILABILITY],
-        isActive: true,
-        isReturnable: true,
-      });
-      if (!result.ok || !result.data) {
-        toast.error(result.error ?? 'Create failed');
-        return;
-      }
-      toast.success('Product created');
-      router.replace(`/products/${result.data.id}`);
-    });
-  }
-
-  return (
-    <div className="mx-auto w-full max-w-[760px]">
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Catalogue' },
-          { label: 'Products', href: '/products' },
-          { label: 'New' },
-        ]}
-        title="New product"
-        description="Create the basics. You can add variants, images, and categories on the next screen."
-      />
-      <div className="px-5 py-5 md:px-8 md:py-6">
-        <form onSubmit={submit}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-[16px]">Basics</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="p-name">Name</Label>
-                <Input
-                  id="p-name"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="Reloaded Camp Shirt"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="p-slug">Slug</Label>
-                <Input
-                  id="p-slug"
-                  value={slug}
-                  onChange={(e) => {
-                    setSlug(e.target.value);
-                    setSlugDirty(true);
-                  }}
-                  placeholder="mool-camp-shirt"
-                  required
-                />
-                <p className="font-mono text-[10.5px] text-ink-500">/products/{slug || 'slug'}</p>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="p-price">Base price (₹)</Label>
-                  <Input
-                    id="p-price"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={basePriceRupees}
-                    onChange={(e) => setBasePriceRupees(e.target.value)}
-                    placeholder="1999"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="p-gst">GST rate</Label>
-                  <select
-                    id="p-gst"
-                    value={gstRate}
-                    onChange={(e) => setGstRate(Number(e.target.value))}
-                    className="flex h-12 w-full rounded-xl border border-ink-200 bg-snow px-3.5 text-[14px] text-ink-900"
-                  >
-                    {GST_RATES.map((r) => (
-                      <option key={r} value={r}>
-                        {r}%
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Availability</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {[
-                    { v: AVAILABILITY.ONLINE_SHIPPABLE, l: 'Online shippable' },
-                    { v: AVAILABILITY.IN_STORE_ONLY, l: 'In-store only' },
-                    { v: AVAILABILITY.BOTH, l: 'Both' },
-                  ].map((opt) => (
-                    <label
-                      key={opt.v}
-                      className={`flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] ${
-                        availability === opt.v
-                          ? 'border-ink-900 bg-ink-50/60 text-ink-900'
-                          : 'border-ink-200 text-ink-500'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="avail"
-                        value={opt.v}
-                        checked={availability === opt.v}
-                        onChange={() => setAvailability(opt.v)}
-                        className="h-4 w-4"
-                      />
-                      {opt.l}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => router.replace('/products')}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending || !name || !slug || !basePriceRupees}>
-              {pending ? 'Creating…' : 'Create & continue'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+// Server Component — runs on the server, creates a draft product with safe
+// defaults, then redirects straight to the editor. The single-screen editor
+// (Phase 1 of the simplification) does the rest of the work.
+//
+// Phase 2a (mobile): inherits HSN / GST / availability / returnable from the
+// most recently updated product. Most shops have one or two HSN codes total,
+// and the GST rate / availability rarely vary from product to product. Saves
+// 4 fields of mobile typing on every new product. Operator can override
+// inline if needed.
+//
+// Draft defaults when no inheritable product exists:
+//   - isActive: false   → never visible on the storefront until Publish
+//   - placeholder name + slug → operator overwrites both first thing
+//   - basePricePaisa: 0 → readiness checklist will gate Publish
+//   - gstRatePercent: 12 → most common slot for apparel
+//   - availabilityFlag: online_shippable → 99% of products
+//   - isReturnable: true
+interface RecentProductsList {
+  items: Array<{ id: string }>;
 }
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
+interface ProductDetail {
+  hsnCode: string | null;
+  gstRatePercent: number | null;
+  availabilityFlag: string;
+  isReturnable: boolean;
+}
+
+export default async function NewProductRedirect() {
+  // Slugs are unique. Stitch a high-entropy suffix so two simultaneous +click
+  // sessions don't collide.
+  const suffix = Math.random().toString(36).slice(2, 10);
+  const draftSlug = `draft-${suffix}`;
+
+  // Best-effort inherit. Failures fall through to the static defaults.
+  const inheritDefaults = await loadInheritDefaults();
+
+  const res = await api<{ id: string }>('/products', {
+    method: 'POST',
+    body: {
+      slug: draftSlug,
+      name: 'Untitled draft',
+      basePricePaisa: 0,
+      gstRatePercent: inheritDefaults?.gstRatePercent ?? 12,
+      hsnCode: inheritDefaults?.hsnCode ?? undefined,
+      availabilityFlag: inheritDefaults?.availabilityFlag ?? AVAILABILITY.ONLINE_SHIPPABLE,
+      isActive: false,
+      isReturnable: inheritDefaults?.isReturnable ?? true,
+    },
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error('Could not create draft product. Try again.');
+  }
+
+  redirect(`/products/${res.body.id}?new=1`);
+}
+
+// Loads the most-recently-updated non-deleted product and returns the four
+// fields we want to inherit. Returns null when there are no existing products
+// (first product in a fresh DB) so the caller falls back to static defaults.
+async function loadInheritDefaults(): Promise<
+  | {
+      hsnCode: string | null;
+      gstRatePercent: number | null;
+      availabilityFlag: string;
+      isReturnable: boolean;
+    }
+  | null
+> {
+  const list = await api<RecentProductsList>('/products?page=1&limit=1');
+  if (!list.ok || !list.body || list.body.items.length === 0) {
+    return null;
+  }
+  const recent = list.body.items[0];
+  const detail = await api<ProductDetail>(`/products/${recent.id}`);
+  if (!detail.ok || !detail.body) return null;
+  return {
+    hsnCode: detail.body.hsnCode,
+    gstRatePercent: detail.body.gstRatePercent,
+    availabilityFlag: detail.body.availabilityFlag,
+    isReturnable: detail.body.isReturnable,
+  };
 }

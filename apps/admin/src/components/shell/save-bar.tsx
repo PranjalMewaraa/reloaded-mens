@@ -13,8 +13,14 @@ interface SaveBarProps {
   className?: string;
 }
 
-// Sticky bottom save bar for editor pages. Only visible when there are unsaved changes
-// (or saving is in progress) so the page stays uncluttered during read flows.
+// Fixed bottom save bar for editor pages. Only visible when there are unsaved
+// changes (or saving is in progress) so the page stays uncluttered during read
+// flows.
+//
+// Phase 2c — switched from `sticky` to `fixed` positioning so it sits above
+// mobile browser chrome (Safari URL bar) and respects the iOS home-indicator
+// safe area. Editor pages add ~80 px bottom padding to their scroll container
+// so the bar doesn't permanently mask the last section.
 export function SaveBar({
   dirty,
   saving,
@@ -27,8 +33,11 @@ export function SaveBar({
   return (
     <div
       className={cn(
-        'sticky bottom-3 z-30 mx-auto mt-6 flex w-full max-w-[1280px] items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-snow px-4 py-3 shadow-soft-md',
-        'md:bottom-6 md:px-5 md:py-3.5',
+        'fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1280px] items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-snow px-4 py-3 shadow-soft-md',
+        // Safe-area-aware bottom inset so iOS notch / home-indicator don't
+        // collide with the bar. Falls back to bottom-3 on browsers without env().
+        'pb-[max(0px,env(safe-area-inset-bottom))]',
+        'md:inset-x-auto md:left-1/2 md:bottom-6 md:-translate-x-1/2 md:px-5 md:py-3.5',
         className,
       )}
       role="status"

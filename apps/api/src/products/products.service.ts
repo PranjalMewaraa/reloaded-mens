@@ -90,23 +90,85 @@ export class ProductsService {
   async create(input: CreateProductInput) {
     const clash = await prisma.product.findUnique({ where: { slug: input.slug } });
     if (clash) throw new ConflictException(`Slug "${input.slug}" already exists`);
-    return prisma.product.create({
-      data: {
-        slug: input.slug,
-        name: input.name,
-        description: input.description ?? null,
-        hsnCode: input.hsnCode ?? null,
-        gstRatePercent: input.gstRatePercent ?? null,
-        availabilityFlag: input.availabilityFlag,
-        basePricePaisa: input.basePricePaisa,
-        compareAtPricePaisa: input.compareAtPricePaisa ?? null,
-        costPricePaisa: input.costPricePaisa ?? null,
-        isActive: input.isActive,
-        isReturnable: input.isReturnable,
-        seoTitle: input.seoTitle ?? null,
-        seoDescription: input.seoDescription ?? null,
-        ogImageUrl: input.ogImageUrl ?? null,
-      },
+
+    // SKU uniqueness is global — pre-check before opening the tx so the error
+    // surfaces cleanly to the caller (CSV import uses this).
+    const variants = input.variants ?? [];
+    if (variants.length > 0) {
+      const skus = variants.map((v) => v.sku);
+      const dupes = skus.filter((sku, i) => skus.indexOf(sku) !== i);
+      if (dupes.length > 0) {
+        throw new ConflictException(`Duplicate SKUs in payload: ${Array.from(new Set(dupes)).join(', ')}`);
+      }
+      const existing = await prisma.productVariant.findMany({
+        where: { sku: { in: skus } },
+        select: { sku: true },
+      });
+      if (existing.length > 0) {
+        throw new ConflictException(
+          `SKU${existing.length === 1 ? '' : 's'} already exist: ${existing.map((v) => v.sku).join(', ')}`,
+        );
+      }
+    }
+
+    const categoryIds = Array.from(new Set(input.categoryIds ?? []));
+    if (categoryIds.length > 0) {
+      const found = await prisma.category.findMany({
+        where: { id: { in: categoryIds }, deletedAt: null },
+        select: { id: true },
+      });
+      if (found.length !== categoryIds.length) {
+        throw new NotFoundException('One or more categoryIds not found');
+      }
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          slug: input.slug,
+          name: input.name,
+          description: input.description ?? null,
+          hsnCode: input.hsnCode ?? null,
+          gstRatePercent: input.gstRatePercent ?? null,
+          availabilityFlag: input.availabilityFlag,
+          basePricePaisa: input.basePricePaisa,
+          compareAtPricePaisa: input.compareAtPricePaisa ?? null,
+          costPricePaisa: input.costPricePaisa ?? null,
+          isActive: input.isActive,
+          isReturnable: input.isReturnable,
+          seoTitle: input.seoTitle ?? null,
+          seoDescription: input.seoDescription ?? null,
+          ogImageUrl: input.ogImageUrl ?? null,
+        },
+      });
+
+      if (variants.length > 0) {
+        await tx.productVariant.createMany({
+          data: variants.map((v) => ({
+            productId: product.id,
+            sku: v.sku,
+            size: v.size ?? null,
+            color: v.color ?? null,
+            priceOverridePaisa: v.priceOverridePaisa ?? null,
+            stockCount: v.stockCount,
+            lowStockThreshold: v.lowStockThreshold,
+            barcode: v.barcode ?? null,
+            isActive: v.isActive,
+          })),
+        });
+      }
+
+      if (categoryIds.length > 0) {
+        await tx.productCategory.createMany({
+          data: categoryIds.map((categoryId, sortOrder) => ({
+            productId: product.id,
+            categoryId,
+            sortOrder,
+          })),
+        });
+      }
+
+      return product;
     });
   }
 
