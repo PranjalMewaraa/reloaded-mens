@@ -1,0 +1,99 @@
+name: Build & publish images
+
+# Triggers
+#   - push to main (most common, after PR merge)
+#   - tags v* (cut a release)
+#   - manual dispatch from the Actions tab
+#
+# Outputs three images under ghcr.io/<owner>/menswear-{storefront,admin,api}
+# tagged with the branch name + commit SHA, plus `latest` on main pushes.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# Cancel an in-flight run when a newer commit lands on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [storefront, admin, api]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Image name is forced lowercase because ghcr.io rejects uppercase
+      # owner/repo segments. We use the repository owner as the namespace
+      # (matches the GITHUB_USER var in deploy/.env.production.example).
+      - name: Compute lowercase owner
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.owner.outputs.value }}/menswear-${{ matrix.app }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GHA cache backend — fast incremental builds across runs.
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+
+      - name: Write deploy summary
+        run: |
+          {
+            echo "### menswear-${{ matrix.app }} — built ✓"
+            echo ""
+            echo "**Image tags:**"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo ""
+            echo "**Digest:** \`${{ steps.build.outputs.digest }}\`"
+            echo ""
+            echo "Deploy on the VPS:"
+            echo '```bash'
+            echo "ssh deploy@151.185.43.166 'cd /opt/menswear && docker compose pull && docker compose up -d'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

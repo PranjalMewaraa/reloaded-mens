@@ -1,0 +1,58 @@
+# Sprint 9 deploy — what Docker should never ship into a build context.
+# Keep this list narrow: every entry is something that either:
+#   - bloats the build context (node_modules, .next),
+#   - leaks secrets (.env*),
+#   - or breaks build caching by changing on every run (.turbo, coverage).
+
+# Dependencies — Dockerfile reinstalls from the lockfile.
+node_modules
+**/node_modules
+
+# Build outputs — Dockerfile builds fresh.
+.next
+**/.next
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+coverage
+**/coverage
+
+# Tooling state that shouldn't ride along.
+.git
+.github
+.vscode
+.idea
+.DS_Store
+*.log
+logs
+pgdata
+redisdata
+
+# Anything that looks like a local upload / runtime storage volume.
+storage
+uploads
+apps/api/uploads
+apps/api/storage
+
+# Secrets — must never enter an image.
+.env
+.env.*
+!.env.example
+
+# Repo docs / dev tooling — not needed in any runtime image.
+README.md
+docs/
+.gitignore
+.gitattributes
+.editorconfig
+.prettierrc
+.prettierignore
+docker-compose.yml
+deploy/
+
+# IDE / OS noise
+Thumbs.db
+*.swp

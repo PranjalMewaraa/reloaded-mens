@@ -1,0 +1,18 @@
+# Sprint 9 deploy — force LF line endings on artifacts that Linux containers
+# read directly. CRLF in a Caddyfile / compose file / Dockerfile / .env will
+# confuse parsers in subtle ways (Caddy turns CR into part of the directive
+# name; compose may misparse env values; dotenv-cli treats CR as part of the
+# value). Source files (.ts/.tsx) keep the default text=auto.
+
+* text=auto
+
+# Deploy artifacts
+Dockerfile         text eol=lf
+*.Dockerfile       text eol=lf
+Caddyfile          text eol=lf
+docker-compose*.yml text eol=lf
+.dockerignore      text eol=lf
+.env*              text eol=lf
+*.sh               text eol=lf
+*.yml              text eol=lf
+*.yaml             text eol=lf

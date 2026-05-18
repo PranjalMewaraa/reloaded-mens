@@ -249,16 +249,27 @@ async function main() {
   console.log(`  Admin user: ${admin.email}`);
 
   // -------- Settings --------
+  // Sprint 9 deploy — business identity lands in the Settings table at seed
+  // time so the storefront footer, invoices, and WhatsApp deep-links pull
+  // from a single source of truth. Values come from env vars on production
+  // (set in /opt/menswear/.env), with sensible local-dev fallbacks below.
   const settings: Array<[string, unknown]> = [
     ['shipping.free_threshold_paisa', 199900],
     ['shipping.flat_fee_paisa', 9900],
     ['returns.window_days', 7],
     ['returns.replacement_keep_threshold_paisa', 50000],
     ['inventory.low_stock_default_threshold', 3],
-    ['business.legal_name', 'Menswear Store Pvt Ltd'],
-    ['business.gstin', '00AAAAA0000A1Z5'],
-    ['business.store_address', '123 Main Street, City, State 110001'],
-    ['business.whatsapp_number', '+919999999999'],
+    // Business identity — read by storefront SSR + email templates + invoices.
+    ['business.legal_name', process.env.BUSINESS_NAME ?? 'Reloaded Menswear'],
+    ['business.email', process.env.BUSINESS_EMAIL ?? 'reloadedmens@gmail.com'],
+    ['business.phone_primary', process.env.BUSINESS_PHONE_PRIMARY ?? '+919958247377'],
+    ['business.phone_secondary', process.env.BUSINESS_PHONE_SECONDARY ?? '+918285317062'],
+    [
+      'business.store_address',
+      process.env.BUSINESS_ADDRESS ?? 'L-285 Sector 23 Sanjay Nagar, Ghaziabad',
+    ],
+    ['business.whatsapp_number', process.env.BUSINESS_WHATSAPP ?? '+919958247377'],
+    ['business.gstin', process.env.BUSINESS_GSTIN ?? ''],
     // Sprint 3 — pincode serviceability allowlist consumed by GET /public/serviceability.
     // Update via Prisma Studio until the admin UI lands (Sprint 9 polish).
     [
