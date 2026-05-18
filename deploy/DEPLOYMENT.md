@@ -5,9 +5,8 @@ Step-by-step runbook for bringing the monorepo up on the E2E Networks VPS at
 
 This document assumes:
 
-- You're deploying for the first time, behind HTTP basic-auth, with all
-  third-party providers in mock mode. Real PhonePe / Shiprocket / Resend
-  arrive in later sprints.
+- You're deploying for the first time, with all third-party providers in
+  mock mode. Real PhonePe / Shiprocket / Resend arrive in later sprints.
 - Local dev still works exactly as before (`pnpm dev`, `pnpm docker:up`) —
   none of these production files affect the local workflow.
 
@@ -83,19 +82,6 @@ Authenticate with the GitHub Container Registry. Use the PAT from step 0:
 echo 'YOUR_PAT_VALUE' | docker login ghcr.io -u your-github-username --password-stdin
 ```
 
-Generate the basic-auth password hash. Use any password — you'll type it in
-the browser when you first visit the storefront. Caddy needs it as a bcrypt
-hash:
-
-```bash
-docker run --rm caddy:2-alpine caddy hash-password
-# When prompted, type the password (twice). Copy the output line —
-# it looks like:  $2a$14$abcDEF... (use the whole thing)
-```
-
-Save that hash somewhere temporary; you'll paste it into the Caddyfile in
-Step 3.
-
 Generate the database password and JWT secrets:
 
 ```bash
@@ -142,20 +128,15 @@ nano .env
 
 # Lock it down so only deploy can read it.
 chmod 600 .env
-
-# Edit the Caddyfile — replace all three PASTE_BCRYPT_HASH_HERE occurrences
-# with the bcrypt hash you generated in Step 2.
-nano Caddyfile
 ```
 
-Verify the `.env` and `Caddyfile` look right:
+Verify the `.env` looks right:
 
 ```bash
 grep REPLACE_ .env  # should return nothing
-grep PASTE_  Caddyfile  # should return nothing
 ```
 
-If either grep prints lines, you missed a placeholder.
+If grep prints lines, you missed a placeholder.
 
 ---
 
@@ -213,23 +194,20 @@ docker compose ps
 
 ## 5 · Verify externally
 
-The site should now answer on the real domain. Each hostname will return
-**401 Unauthorized** because of the pre-launch basic-auth — that's correct:
+The site should now answer on the real domain. All three hostnames should
+return 200 directly:
 
 ```bash
 curl -I https://reloadedmens.in
-# HTTP/2 401
-# www-authenticate: Basic ...
-
-curl -I -u 'reloaded:YOUR_PLAIN_PASSWORD' https://reloadedmens.in
 # HTTP/2 200
+
+curl -s https://api.reloadedmens.in/api/v1/health
+# {"status":"ok",...}
 ```
 
-In a browser, visit `https://reloadedmens.in` — you should see a basic-auth
-dialog. Enter username `reloaded` + the password you set in Step 2. The
-storefront should load.
-
-Repeat for `https://admin.reloadedmens.in` and `https://api.reloadedmens.in/api/v1/health`.
+In a browser, visit `https://reloadedmens.in` — the storefront should load
+directly. Then visit `https://admin.reloadedmens.in` — the admin app's own
+login screen appears (no edge basic-auth gate).
 
 Log into the admin (the seed creates `admin@example.com` with password
 `changeme` — change it immediately from the profile page, or via
@@ -249,7 +227,7 @@ Verify again:
 
 ```bash
 curl -I https://reloadedmens.in
-# should still return 401 with basic-auth challenge
+# HTTP/2 200 (now served via Cloudflare's proxy)
 ```
 
 ---
@@ -281,28 +259,25 @@ docker compose up -d
 
 ---
 
-## 8 · Going live (Sprint 17 — remove basic-auth on storefront)
+## 8 · Going live
 
-When you're ready for real customer traffic:
+The Caddyfile in this repo ships in launch posture: storefront is fully
+public + indexable, admin + api are gated by their own JWT auth and kept
+`noindex` so search engines don't list them. No edge basic_auth anywhere.
 
-1. Edit `/opt/menswear/Caddyfile`. In the storefront site block (the one
-   matching `reloadedmens.in, www.reloadedmens.in`):
-   - Delete the entire `basic_auth { ... }` block.
-   - Delete the line `X-Robots-Tag "noindex, nofollow"`.
-2. Keep the basic_auth + noindex on `admin.reloadedmens.in` and
-   `api.reloadedmens.in` (or replace each with an IP allowlist using
-   `@allowed remote_ip <your-ip>` + `respond @!allowed 403`).
-3. Reload Caddy without dropping connections:
+If you ever want to lock admin / api behind an IP allowlist instead, add
+inside the relevant site block:
+
+```caddyfile
+@allowed remote_ip <your-ip>/32
+respond @!allowed 403
+```
+
+After any Caddyfile change:
 
 ```bash
 docker compose restart caddy
-```
-
-Verify:
-
-```bash
-curl -I https://reloadedmens.in
-# HTTP/2 200    (no www-authenticate header)
+curl -I https://reloadedmens.in   # HTTP/2 200
 ```
 
 ---

@@ -1,25 +1,11 @@
 ################################################################################
 # Reloaded Menswear — production Caddyfile
 #
-# Pre-launch posture: basic_auth gates ALL three sites + noindex/nofollow
-# headers everywhere so search engines don't pick up the staging site.
-#
-# NOTE on api.reloadedmens.in: basic_auth CANNOT live here. The storefront's
-# client-side JS (NEXT_PUBLIC_API_URL=https://api.reloadedmens.in) fires
-# fetches from the browser directly to this host — basic_auth would 401
-# them and strip CORS headers off the 401 response. The API enforces its
-# own auth (JWT access cookies + RolesGuard / CustomerAuthGuard) on every
-# non-public route, so the public surface is intentional.
-#
-# To go live at launch (Sprint 17):
-#   1. Remove the `basic_auth` block from the storefront site.
-#   2. Remove the `X-Robots-Tag "noindex, nofollow"` line from storefront.
-#   3. Keep basic_auth on admin.reloadedmens.in (or replace with an IP
-#      allowlist via `@allowed remote_ip`).
-#   4. Reload Caddy: `docker compose restart caddy`.
-#
-# To generate the bcrypt hash for basic_auth on the VPS:
-#   docker run --rm caddy:2-alpine caddy hash-password
+# Posture: storefront is fully public. Admin + api have no basic_auth at the
+# edge — admin enforces its own auth (JWT + RolesGuard) and the api does too
+# (JWT cookies + CustomerAuthGuard / RolesGuard on every non-public route).
+# X-Robots-Tag "noindex, nofollow" stays on admin + api so crawlers don't
+# index those hostnames even though they're reachable.
 #
 # Cloudflare is in front of all three hostnames. Set Cloudflare SSL mode to
 # "Full (strict)" once Caddy has issued its origin certs. Initial DNS records
@@ -33,15 +19,10 @@
 }
 
 # ----------------------------------------------------------------------------
-# Storefront — public-facing, both apex and www aliases.
+# Storefront — public-facing, both apex and www aliases. Fully indexable.
 # ----------------------------------------------------------------------------
 reloadedmens.in, www.reloadedmens.in {
 	encode gzip zstd
-
-	# Pre-launch gate — remove at launch.
-	basic_auth {
-		reloaded PASTE_BCRYPT_HASH_HERE
-	}
 
 	header {
 		# Long-life HSTS once SSL is stable. Subdomains included so
@@ -50,8 +31,6 @@ reloadedmens.in, www.reloadedmens.in {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		# Pre-launch — strip at launch.
-		X-Robots-Tag "noindex, nofollow"
 		# Drop the Server: caddy banner.
 		-Server
 	}
@@ -73,14 +52,11 @@ reloadedmens.in, www.reloadedmens.in {
 }
 
 # ----------------------------------------------------------------------------
-# Admin panel — basic_auth stays on at launch (or move to IP allowlist).
+# Admin panel — no basic_auth; the admin app enforces its own JWT login.
+# Kept noindex so crawlers don't list the login page.
 # ----------------------------------------------------------------------------
 admin.reloadedmens.in {
 	encode gzip zstd
-
-	basic_auth {
-		reloaded PASTE_BCRYPT_HASH_HERE
-	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"

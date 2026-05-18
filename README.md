@@ -79,6 +79,6 @@ Images are built by GitHub Actions
 ([`.github/workflows/build-images.yml`](.github/workflows/build-images.yml))
 on every push to `main` and pushed to `ghcr.io/<owner>/menswear-*`.
 
-The platform is in pre-launch mode — basic-auth gates all three sites and
-search engines are explicitly blocked via `X-Robots-Tag: noindex`. See
-DEPLOYMENT.md §8 for the launch-day flip.
+Storefront is fully public + indexable. Admin + api have no edge
+basic-auth — admin enforces its own JWT login and api enforces its own
+JWT guards. Both keep `X-Robots-Tag: noindex` so crawlers don't list them.
