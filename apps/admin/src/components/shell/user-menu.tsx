@@ -1,7 +1,6 @@
 'use client';
 
 import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { LogOut, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -20,15 +19,18 @@ interface Props {
 }
 
 export function UserMenu({ user }: Props) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   function onSignOut() {
     startTransition(async () => {
       await logoutAction();
       toast.success('Signed out');
-      router.replace('/login');
-      router.refresh();
+      // Hard navigation (not router.replace) so the browser drops the
+      // in-memory router cache + re-issues the request from scratch.
+      // Middleware then sees the cleared cookies and serves /login fresh.
+      // router.replace's client-side nav has been observed to reuse the
+      // current segment cache, occasionally leaving stale auth UI visible.
+      window.location.assign('/login');
     });
   }
 
