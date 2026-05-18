@@ -4,11 +4,18 @@
 # Pre-launch posture: basic_auth gates ALL three sites + noindex/nofollow
 # headers everywhere so search engines don't pick up the staging site.
 #
+# NOTE on api.reloadedmens.in: basic_auth CANNOT live here. The storefront's
+# client-side JS (NEXT_PUBLIC_API_URL=https://api.reloadedmens.in) fires
+# fetches from the browser directly to this host — basic_auth would 401
+# them and strip CORS headers off the 401 response. The API enforces its
+# own auth (JWT access cookies + RolesGuard / CustomerAuthGuard) on every
+# non-public route, so the public surface is intentional.
+#
 # To go live at launch (Sprint 17):
 #   1. Remove the `basic_auth` block from the storefront site.
 #   2. Remove the `X-Robots-Tag "noindex, nofollow"` line from storefront.
-#   3. Keep basic_auth on admin.reloadedmens.in and api.reloadedmens.in
-#      (or replace those with an IP allowlist via `@allowed remote_ip`).
+#   3. Keep basic_auth on admin.reloadedmens.in (or replace with an IP
+#      allowlist via `@allowed remote_ip`).
 #   4. Reload Caddy: `docker compose restart caddy`.
 #
 # To generate the bcrypt hash for basic_auth on the VPS:
@@ -102,15 +109,13 @@ admin.reloadedmens.in {
 }
 
 # ----------------------------------------------------------------------------
-# API — basic_auth stays on at launch (storefront talks to it server-side
-# from within the docker network; only external calls would hit this host).
+# API — NO basic_auth. The storefront's browser JS fetches this host
+# cross-origin (NEXT_PUBLIC_API_URL); a basic_auth 401 here would also
+# strip CORS headers and break every client-side call. The API enforces
+# its own auth — public endpoints are public by design.
 # ----------------------------------------------------------------------------
 api.reloadedmens.in {
 	encode gzip zstd
-
-	basic_auth {
-		reloaded PASTE_BCRYPT_HASH_HERE
-	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
