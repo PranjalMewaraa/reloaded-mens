@@ -1,0 +1,147 @@
+# Production stack for Reloaded Menswear.
+#
+# Topology:
+#   - caddy fronts everything on :80/:443 (origin SSL via Let's Encrypt).
+#   - storefront / admin / api are app containers pulled from ghcr.io.
+#   - postgres + redis are internal-only (no host port binding) on a
+#     separate `backend` network so the apps reach them via DNS but the
+#     world can't.
+#
+# On the VPS this file lives at /opt/menswear/docker-compose.yml and is
+# paired with a local .env (gitignored). Image tags default to `latest`;
+# override IMAGE_TAG=<sha> to pin a deploy to a known-good commit.
+
+name: menswear
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - storefront
+      - admin
+      - api
+    networks:
+      - web
+
+  storefront:
+    image: ghcr.io/${GITHUB_USER}/menswear-storefront:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - web
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  admin:
+    image: ghcr.io/${GITHUB_USER}/menswear-admin:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - web
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  api:
+    image: ghcr.io/${GITHUB_USER}/menswear-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    # Volume mounts:
+    #   - api_storage      uploaded files survive image upgrades. Path inside
+    #                       the container must match STORAGE_LOCAL_PATH in .env
+    #                       (default /data/storage).
+    #   - ./.env:/app/.env  read-only mount of the host .env. The api process
+    #                       itself reads env via env_file (above), but the
+    #                       seed + migrate scripts (`pnpm --filter @repo/db
+    #                       migrate:deploy` / `seed`) invoke dotenv-cli with
+    #                       `-e ../../.env` and the file needs to exist on disk.
+    volumes:
+      - api_storage:/data/storage
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - web
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: menswear
+      POSTGRES_DB: menswear
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # No port mapping — backend network only. Run `docker compose exec
+    # postgres psql -U menswear` from the VPS for ad-hoc SQL.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U menswear -d menswear']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redisdata:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+networks:
+  # Public-facing network — caddy + app containers.
+  web:
+    driver: bridge
+  # Internal-only — postgres + redis + the apps that need them.
+  backend:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
+  redisdata:
+  api_storage:

@@ -1,0 +1,138 @@
+################################################################################
+# Reloaded Menswear — production Caddyfile
+#
+# Pre-launch posture: basic_auth gates ALL three sites + noindex/nofollow
+# headers everywhere so search engines don't pick up the staging site.
+#
+# To go live at launch (Sprint 17):
+#   1. Remove the `basic_auth` block from the storefront site.
+#   2. Remove the `X-Robots-Tag "noindex, nofollow"` line from storefront.
+#   3. Keep basic_auth on admin.reloadedmens.in and api.reloadedmens.in
+#      (or replace those with an IP allowlist via `@allowed remote_ip`).
+#   4. Reload Caddy: `docker compose restart caddy`.
+#
+# To generate the bcrypt hash for basic_auth on the VPS:
+#   docker run --rm caddy:2-alpine caddy hash-password
+#
+# Cloudflare is in front of all three hostnames. Set Cloudflare SSL mode to
+# "Full (strict)" once Caddy has issued its origin certs. Initial DNS records
+# must be DNS-only (gray cloud) until first cert issuance — otherwise Caddy's
+# HTTP-01 challenge gets eaten by Cloudflare's proxy.
+################################################################################
+
+{
+	# Email used by Let's Encrypt for cert renewal warnings.
+	email reloadedmens@gmail.com
+}
+
+# ----------------------------------------------------------------------------
+# Storefront — public-facing, both apex and www aliases.
+# ----------------------------------------------------------------------------
+reloadedmens.in, www.reloadedmens.in {
+	encode gzip zstd
+
+	# Pre-launch gate — remove at launch.
+	basic_auth {
+		reloaded PASTE_BCRYPT_HASH_HERE
+	}
+
+	header {
+		# Long-life HSTS once SSL is stable. Subdomains included so
+		# admin/api inherit on first visit.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Pre-launch — strip at launch.
+		X-Robots-Tag "noindex, nofollow"
+		# Drop the Server: caddy banner.
+		-Server
+	}
+
+	reverse_proxy storefront:3000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /data/access-storefront.log {
+			roll_size 10MiB
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format console
+	}
+}
+
+# ----------------------------------------------------------------------------
+# Admin panel — basic_auth stays on at launch (or move to IP allowlist).
+# ----------------------------------------------------------------------------
+admin.reloadedmens.in {
+	encode gzip zstd
+
+	basic_auth {
+		reloaded PASTE_BCRYPT_HASH_HERE
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		# Admin never frames itself — DENY is stricter than SAMEORIGIN.
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	reverse_proxy admin:3001 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /data/access-admin.log {
+			roll_size 10MiB
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format console
+	}
+}
+
+# ----------------------------------------------------------------------------
+# API — basic_auth stays on at launch (storefront talks to it server-side
+# from within the docker network; only external calls would hit this host).
+# ----------------------------------------------------------------------------
+api.reloadedmens.in {
+	encode gzip zstd
+
+	basic_auth {
+		reloaded PASTE_BCRYPT_HASH_HERE
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	reverse_proxy api:4000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /data/access-api.log {
+			roll_size 10MiB
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format console
+	}
+}

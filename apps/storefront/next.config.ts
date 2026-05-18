@@ -1,7 +1,15 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Sprint 9 deploy — `standalone` emits `.next/standalone/server.js` plus a
+  // minimal pruned node_modules tree, which is what the production Docker
+  // image runs. `outputFileTracingRoot` is required in a monorepo so Next
+  // pulls workspace deps up from the repo root (otherwise it traces only
+  // inside apps/storefront/ and misses @repo/* sources).
+  output: 'standalone',
+  outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@repo/ui', '@repo/types'],
   images: {
     // Local product images are uploaded to the API and served via @nestjs/serve-static
