@@ -1,0 +1,4 @@
+# Sprint 9 deploy — Next.js standalone build references apps/<app>/public
+# (Dockerfile COPY step). Even if the storefront has no static assets, the
+# directory must exist so the COPY doesn't fail. Real static files (favicon,
+# og-image, robots.txt) land here when added.
