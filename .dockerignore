@@ -32,8 +32,10 @@ pgdata
 redisdata
 
 # Anything that looks like a local upload / runtime storage volume.
-storage
-uploads
+# Anchored to the build-context root so we don't also strip source dirs
+# (apps/api/src/storage/ + apps/api/src/uploads/ exist).
+/storage
+/uploads
 apps/api/uploads
 apps/api/storage
 
