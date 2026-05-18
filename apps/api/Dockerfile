@@ -51,6 +51,10 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # Generate the Prisma client BEFORE building the API. NestJS / webpack would
 # fail to resolve `@prisma/client` types otherwise.
 RUN pnpm --filter @repo/db exec prisma generate
+# Bump V8 heap to 4 GB — the api webpack bundle inlines all @repo/* TS
+# (workspace packages allowlisted in webpack-node-externals). On the default
+# 1.5 GB heap this OOMs partway through ts-loader's parse phase.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm turbo run build --filter=@repo/api
 
 # ------------------- runner -------------------

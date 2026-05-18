@@ -39,6 +39,9 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # Admin reads @repo/db directly in Server Components — the Prisma client must
 # exist before `next build` traces its types.
 RUN pnpm --filter @repo/db exec prisma generate
+# Bump V8 heap so Next's webpack + file-tracing doesn't OOM on the default
+# ~1.5 GB heap inside the Docker build sandbox.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm turbo run build --filter=@repo/admin
 
 # ------------------- runner -------------------

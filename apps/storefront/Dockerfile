@@ -53,6 +53,9 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # turbo's `^build` graph may pull packages/db, and a missing client breaks
 # parallel typechecks on a cold build. Generate is cheap (<5 s).
 RUN pnpm --filter @repo/db exec prisma generate
+# Bump V8 heap so Next's webpack + file-tracing doesn't OOM on the default
+# ~1.5 GB heap inside the Docker build sandbox.
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm turbo run build --filter=@repo/storefront
 
 # ------------------- runner -------------------
