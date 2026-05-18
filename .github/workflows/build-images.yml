@@ -9,7 +9,10 @@ name: Build & publish images
 # tagged with the branch name + commit SHA, plus `latest` on main pushes.
 on:
   push:
-    branches: [main]
+    # `deploy/vps-production` is the working branch for the initial VPS rollout
+    # — push there should auto-rebuild images. Once cut to main this can drop
+    # the branch.
+    branches: [main, deploy/vps-production]
     tags: ['v*']
   workflow_dispatch:
 
