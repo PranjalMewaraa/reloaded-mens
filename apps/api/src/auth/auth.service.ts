@@ -42,6 +42,14 @@ export class AuthService {
   private readonly refreshTtl: string;
   private readonly stageTtl: string;
   private readonly isProd: boolean;
+  // When set, the cookie is issued with Domain=<value> so it's valid across
+  // every subdomain of the registrable domain. In production we set this to
+  // `.reloadedmens.in` so the same auth cookie reaches reloadedmens.in,
+  // admin.reloadedmens.in, AND api.reloadedmens.in — otherwise the admin's
+  // client-side fetches to api.* would arrive without a cookie (host-only
+  // cookies are scoped to the issuing host). Left undefined locally so dev
+  // cookies stay host-only on localhost.
+  private readonly cookieDomain: string | undefined;
   // When false, /auth/login short-circuits the TOTP step and issues a session immediately.
   // Defaults to true (secure-by-default). MVP local/dev sets this to false in .env.
   readonly totpRequired: boolean;
@@ -57,6 +65,7 @@ export class AuthService {
     this.refreshTtl = config.get<string>('JWT_REFRESH_TTL') ?? '30d';
     this.stageTtl = config.get<string>('JWT_STAGE_TTL') ?? '5m';
     this.isProd = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    this.cookieDomain = config.get<string>('COOKIE_DOMAIN') || undefined;
     this.totpRequired = parseBool(config.get<string>('ADMIN_TOTP_REQUIRED'), true);
   }
 
@@ -104,6 +113,7 @@ export class AuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: COOKIE_PATHS.access,
       maxAge: durationToMs(this.accessTtl),
     });
@@ -111,6 +121,7 @@ export class AuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: COOKIE_PATHS.refresh,
       maxAge: durationToMs(this.refreshTtl),
     });
@@ -122,6 +133,7 @@ export class AuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: COOKIE_PATHS.stage,
       maxAge: durationToMs(this.stageTtl),
     });
@@ -133,19 +145,22 @@ export class AuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: COOKIE_PATHS.access,
       maxAge: durationToMs(this.accessTtl),
     });
   }
 
+  // clearCookie must include the same domain/path the cookie was issued with —
+  // otherwise the browser keeps the original cookie alive.
   clearSession(res: Response) {
-    res.clearCookie(ACCESS_COOKIE, { path: COOKIE_PATHS.access });
-    res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATHS.refresh });
-    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage });
+    res.clearCookie(ACCESS_COOKIE, { path: COOKIE_PATHS.access, domain: this.cookieDomain });
+    res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATHS.refresh, domain: this.cookieDomain });
+    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage, domain: this.cookieDomain });
   }
 
   clearStage(res: Response) {
-    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage });
+    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage, domain: this.cookieDomain });
   }
 
   async loadActiveUser(userId: string) {

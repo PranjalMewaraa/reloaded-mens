@@ -56,6 +56,11 @@ export class CustomerAuthService {
   private readonly accessTtl: string;
   private readonly refreshTtl: string;
   private readonly isProd: boolean;
+  // See AuthService.cookieDomain — same rationale. In production
+  // COOKIE_DOMAIN=.reloadedmens.in so a session minted by the api host is
+  // visible to the storefront's SSR (which lives on the apex) and to
+  // client-side fetches back to the api.
+  private readonly cookieDomain: string | undefined;
   private readonly otpTtlMinutes: number;
   private readonly otpMaxAttempts: number;
   private readonly devFallbackEmail: string | null;
@@ -75,6 +80,7 @@ export class CustomerAuthService {
     this.accessTtl = config.get<string>('JWT_CUSTOMER_ACCESS_TTL') ?? '15m';
     this.refreshTtl = config.get<string>('JWT_CUSTOMER_REFRESH_TTL') ?? '30d';
     this.isProd = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    this.cookieDomain = config.get<string>('COOKIE_DOMAIN') || undefined;
     this.otpTtlMinutes = numberOr(config.get<string>('CUSTOMER_OTP_TTL_MINUTES'), 10);
     this.otpMaxAttempts = numberOr(config.get<string>('CUSTOMER_OTP_MAX_ATTEMPTS'), 5);
     // Dev-only fallback email — used when the customer's phone has no email on
@@ -266,6 +272,7 @@ export class CustomerAuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: CUSTOMER_COOKIE_PATHS.access,
       maxAge: durationToMs(this.accessTtl),
     });
@@ -273,6 +280,7 @@ export class CustomerAuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: CUSTOMER_COOKIE_PATHS.refresh,
       maxAge: durationToMs(this.refreshTtl),
     });
@@ -284,14 +292,21 @@ export class CustomerAuthService {
       httpOnly: true,
       sameSite: 'lax',
       secure: this.isProd,
+      domain: this.cookieDomain,
       path: CUSTOMER_COOKIE_PATHS.access,
       maxAge: durationToMs(this.accessTtl),
     });
   }
 
   clearSession(res: Response) {
-    res.clearCookie(CUSTOMER_ACCESS_COOKIE, { path: CUSTOMER_COOKIE_PATHS.access });
-    res.clearCookie(CUSTOMER_REFRESH_COOKIE, { path: CUSTOMER_COOKIE_PATHS.refresh });
+    res.clearCookie(CUSTOMER_ACCESS_COOKIE, {
+      path: CUSTOMER_COOKIE_PATHS.access,
+      domain: this.cookieDomain,
+    });
+    res.clearCookie(CUSTOMER_REFRESH_COOKIE, {
+      path: CUSTOMER_COOKIE_PATHS.refresh,
+      domain: this.cookieDomain,
+    });
   }
 
   // =====================================================
