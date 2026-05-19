@@ -77,3 +77,32 @@
     @apply rounded-md;
   }
 }
+
+/*
+ * `Marquee` component animation. The keyframe lives here (not in
+ * tailwind.config.ts theme.extend.keyframes) because Tailwind purges
+ * keyframes that aren't referenced by an `animate-*` class in scanned
+ * source files. The Marquee component uses `style={{ animation: ... }}`
+ * inline so per-instance speed can vary — which the Tailwind content
+ * scanner can't see, so it'd tree-shake the keyframe and animations
+ * would silently fail in production. Defining it in globals.css
+ * sidesteps the purge entirely.
+ */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Hide the native scrollbar but keep the element scrollable. Used by the PDP
+ * image carousel so a thin OS scrollbar doesn't sit under the photo. */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/legacy Edge */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / new Edge */
+}

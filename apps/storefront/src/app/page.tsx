@@ -6,6 +6,7 @@ import { Marquee } from '@/components/marquee';
 import { publicApi } from '@/lib/api';
 import { env } from '@/lib/env';
 import { Hero } from './hero';
+import { Testimonials } from './testimonials';
 
 // Editorial marquee — purely decorative, sits between sections like a brand
 // signature. Slow-moving so it reads as a calm rhythm rather than motion.
@@ -128,6 +129,11 @@ export default async function HomePage() {
           </div>
         </section>
       ) : null}
+
+      {/* Social proof — sits between products and the trust strip so the
+          rhythm reads as: see the goods → hear from buyers → see the
+          brand promises → footer. */}
+      <Testimonials />
 
       {/* Trust strip */}
       <section className="bg-ink-900 text-snow">
