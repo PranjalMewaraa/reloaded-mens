@@ -12,11 +12,16 @@ const config: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@repo/ui', '@repo/types'],
   images: {
-    // Local product images are uploaded to the API and served via @nestjs/serve-static
-    // at /files/*. In production this will be R2 / a CDN host — add those here too.
+    // Product + category images are uploaded to the API and served via
+    // @nestjs/serve-static at /files/*. PUBLIC_API_URL (api.reloadedmens.in
+    // in prod, localhost in dev) determines which host appears in the URL —
+    // both must be allow-listed here or next/image returns 400 from the
+    // /_next/image optimizer endpoint. Add R2 / CDN hosts here once they
+    // land in Phase 2.
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost', port: '4000', pathname: '/files/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '4000', pathname: '/files/**' },
+      { protocol: 'https', hostname: 'api.reloadedmens.in', pathname: '/files/**' },
       // Picsum placeholders used by the dev seed. Remove once real product photos are uploaded.
       { protocol: 'https', hostname: 'picsum.photos', pathname: '/**' },
       { protocol: 'https', hostname: 'fastly.picsum.photos', pathname: '/**' },
