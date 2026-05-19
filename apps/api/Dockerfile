@@ -76,6 +76,21 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nestjs
 
+# Pre-create the upload directory and chown to the runtime user BEFORE the
+# named volume mounts on top of it. Docker copies the image's directory
+# permissions to a FRESH volume on first mount — so this gives the volume
+# nestjs ownership from the start. If you ever change STORAGE_LOCAL_PATH in
+# .env, update the path here to match (or grant the existing volume the
+# right perms manually). Without this, mkdir at the api runtime layer would
+# EACCES because /data is root-owned in the base image.
+#
+# NOTE: an EXISTING volume keeps its original ownership when this image is
+# pulled — Docker only seeds permissions on the first mount of a fresh
+# volume. To apply this fix to an already-created volume, the volume has
+# to be removed (`docker volume rm menswear_api_storage`) once.
+RUN mkdir -p /data/storage \
+    && chown -R nestjs:nodejs /data /data/storage
+
 # Runtime payload:
 #  - apps/api/dist            — webpack-bundled main.js
 #  - apps/api/package.json    — main + "type":"module" resolution
