@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Instagram, MessageCircle } from 'lucide-react';
+import { Instagram, MessageCircle, Phone } from 'lucide-react';
 import { env } from '@/lib/env';
 
 // Canonical Instagram profile — the `?igsh=` tracking param Instagram adds
@@ -7,6 +7,19 @@ import { env } from '@/lib/env';
 // goo to every visitor's click.
 const INSTAGRAM_URL = 'https://www.instagram.com/reloadedmensss';
 const INSTAGRAM_HANDLE = '@reloadedmensss';
+
+// Business contact numbers. Both live in deploy/.env.production.example as
+// BUSINESS_PHONE_PRIMARY / BUSINESS_PHONE_SECONDARY, but those are server-
+// side env vars — exposing them to the storefront would require new
+// NEXT_PUBLIC_* envs + a rebuild pipeline plumbing for two strings that
+// effectively never change. Hardcoded here is the simpler trade.
+//
+// `tel:` href uses the E.164 form (no spaces) so iOS/Android dial correctly;
+// the visible label uses spaces for readability.
+const PHONES: Array<{ tel: string; label: string }> = [
+  { tel: '+919958247377', label: '+91 99582 47377' },
+  { tel: '+918285317062', label: '+91 82853 17062' },
+];
 
 const SHOP_LINKS = [
   { href: '/c/shirts', label: 'Shirts' },
@@ -65,6 +78,21 @@ export function Footer() {
               <Instagram className="h-4 w-4" />
               <span>{INSTAGRAM_HANDLE}</span>
             </a>
+
+            {/* Phone numbers — both surfaced so a customer who prefers calls
+                over WhatsApp has a path. Single Phone icon + stacked numbers
+                so it reads as one "Call us" group rather than two separate
+                links competing for attention. `tel:` hrefs use E.164. */}
+            <div className="mt-3 flex items-start gap-2 text-[12.5px] text-ink-700">
+              <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <div className="flex flex-col gap-0.5">
+                {PHONES.map((p) => (
+                  <a key={p.tel} href={`tel:${p.tel}`} className="hover:text-ink-900">
+                    {p.label}
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
 
           <FooterColumn label="Shop" links={SHOP_LINKS} />
