@@ -10,15 +10,15 @@ export default function VisitPage() {
   return (
     <StaticPage
       title="Visit the store"
-      intro="Our Bengaluru store stocks the full collection plus made-to-measure pieces that aren't available online. Walk in or book a fitting."
+      intro="Our Ghaziabad store carries the full edit plus a few pieces we keep off the site. Walk in or WhatsApp ahead to book a fitting."
     >
       <h2>Address</h2>
       <p>
-        Reloaded Bengaluru
+        Reloaded Menswear
         <br />
-        24/B, MG Road, Indiranagar
+        L-285, Sector 23, Sanjay Nagar
         <br />
-        Bengaluru 560008
+        Ghaziabad, Delhi NCR
       </p>
       <h2>Hours</h2>
       <p>Tuesday – Sunday, 11am – 9pm IST. Closed Mondays.</p>

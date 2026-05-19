@@ -1,10 +1,24 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ProductCard, type ProductCardData } from '@/components/product/product-card';
+import { Marquee } from '@/components/marquee';
 import { publicApi } from '@/lib/api';
 import { env } from '@/lib/env';
+import { Hero } from './hero';
+
+// Editorial marquee — purely decorative, sits between sections like a brand
+// signature. Slow-moving so it reads as a calm rhythm rather than motion.
+// Phrasing aligns with Reloaded's actual positioning: we curate and resell
+// the latest menswear, we don't manufacture — so no "made in India",
+// "slow fashion", or "curated fabrics" (which all imply craftsmanship).
+const BRAND_PHRASES = [
+  'Hand-picked',
+  'Latest drops',
+  'Best in menswear',
+  'Honest pricing',
+  'Drop 01',
+];
 
 interface PublicListResponse {
   items: ProductCardData[];
@@ -29,32 +43,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px]">
-      {/* Hero */}
-      <section className="grid gap-6 px-5 pb-12 pt-6 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-16">
-        <div className="flex flex-col justify-center">
-          <span className="label-caps">SS26 · The first drop</span>
-          <h1 className="mt-3 font-display text-[44px] font-semibold leading-[1.04] tracking-tight text-ink-900 md:text-[72px]">
-            Clothes for the men who wear them.
-          </h1>
-          <p className="mt-4 max-w-[52ch] text-[15px] leading-[1.6] text-ink-600">
-            Considered cuts in honest fabrics. Made for daily wear, priced without the
-            middlemen. Shipped from Bengaluru.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button asChild size="lg">
-              <Link href="/c/shirts">Shop the drop</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/visit">Visit the store</Link>
-            </Button>
-          </div>
-        </div>
-        <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-ink-100 md:aspect-[5/6]">
-          <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
-            Hero photo
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Featured categories */}
       {categories.length > 0 ? (
@@ -103,13 +92,28 @@ export default async function HomePage() {
         </section>
       ) : null}
 
+      {/* Editorial marquee — brand signature between sections. Slow scroll,
+          full-bleed top and bottom hairline. Decorative only — no announce,
+          so screen readers skip it (the phrases also appear in the trust strip
+          + footer copy where AT can read them statically). */}
+      <Marquee
+        items={BRAND_PHRASES.map((p) => (
+          <span className="font-display italic">{p}</span>
+        ))}
+        speed={48}
+        className="my-6 border-y border-ink-100 py-4 text-[18px] text-ink-700 md:my-10 md:py-5 md:text-[22px]"
+      />
+
       {/* New in rail */}
       {featured.length > 0 ? (
         <section className="px-5 pb-12 md:px-8 md:pb-16">
           <div className="mb-4 flex items-end justify-between">
-            <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
-              New in
-            </h2>
+            <div className="flex items-baseline gap-3">
+              <span className="label-caps">Drop 01</span>
+              <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
+                New in
+              </h2>
+            </div>
             <Link
               href="/shop?sort=new"
               className="text-[13px] text-ink-700 hover:text-ink-900"
@@ -129,8 +133,8 @@ export default async function HomePage() {
       <section className="bg-ink-900 text-snow">
         <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-6 px-5 py-10 md:grid-cols-3 md:px-8 md:py-12">
           <TrustItem
-            label="Made in India"
-            body="Cut, sewn, and finished in small workshops across Bengaluru and Tirupur."
+            label="Hand-picked"
+            body="We comb menswear for the latest worth owning. Only the pieces that pass our own fit, fabric, and finish test make the shop."
           />
           <TrustItem
             label="14-day returns"

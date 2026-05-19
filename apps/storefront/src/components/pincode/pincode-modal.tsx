@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { usePathname } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -110,10 +111,14 @@ export function PincodeModal({ open, onOpenChange, allowSkip = true }: PincodeMo
   );
 }
 
-// Sits inside the shell layout — opens once per visitor if no pincode is stored.
-// Subsequent renders are silent (state lives in PincodeProvider hydration).
+// Sits inside the shell layout — opens once per visitor if no pincode is stored,
+// BUT only on PDP routes (`/p/<slug>`). Pincode is only required when the user
+// is actually considering a purchase; prompting on home / shop / category pages
+// reads as friction. The component still mounts globally so the cross-page
+// "prompted" state persists, but the open() decision is gated by pathname.
 export function FirstVisitPincodePrompt() {
   const { pincode } = usePincode();
+  const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
   const [prompted, setPrompted] = React.useState(false);
@@ -128,11 +133,17 @@ export function FirstVisitPincodePrompt() {
 
   React.useEffect(() => {
     if (!hydrated || prompted) return;
+    // Only prompt on product detail pages. The `/p/` prefix is the PDP route
+    // segment (see apps/storefront/src/app/p/[slug]/). Any other route — home,
+    // /shop, /c/*, /search, /account, /cart, /checkout — skips the prompt
+    // (checkout has its own address form that captures pincode inline).
+    const isPdp = pathname?.startsWith('/p/') ?? false;
+    if (!isPdp) return;
     if (!pincode) {
       setOpen(true);
       setPrompted(true);
     }
-  }, [hydrated, prompted, pincode]);
+  }, [hydrated, prompted, pincode, pathname]);
 
   return <PincodeModal open={open} onOpenChange={setOpen} allowSkip />;
 }

@@ -42,7 +42,7 @@ export default function ContactPage() {
       </p>
       <h2>Visit us</h2>
       <p>
-        Try things on in person at our Bengaluru store. See the <a href="/visit">visit page</a>{' '}
+        Try things on in person at our Ghaziabad store. See the <a href="/visit">visit page</a>{' '}
         for directions and trading hours.
       </p>
     </StaticPage>

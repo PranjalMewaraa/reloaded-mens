@@ -90,7 +90,11 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
       </nav>
 
       {category.imageUrl ? (
-        <div className="relative mx-5 mt-2 aspect-[16/5] overflow-hidden rounded-2xl bg-ink-50 md:mx-8 md:aspect-[21/6]">
+        // Hero — image with the title/count/description overlaid on the bottom-left.
+        // A dark gradient sits between the image and the text so the white type stays
+        // readable against bright or busy photos; drop-shadow on the H1 picks up the
+        // last bit of contrast when the photo's bottom is already light.
+        <div className="relative mx-5 mt-2 aspect-[16/9] overflow-hidden rounded-2xl bg-ink-50 md:mx-8 md:aspect-[21/8]">
           <Image
             src={category.imageUrl}
             alt={category.name}
@@ -100,22 +104,50 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
             priority
             unoptimized
           />
+          {/* Gradient — vertical bottom-up, slightly stronger on the left where
+              the text sits. `from-black/70 to-transparent` reads as a soft
+              vignette rather than a hard band. */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 px-5 pb-5 md:px-8 md:pb-7">
+            <h1
+              className="font-display text-[32px] font-semibold leading-[1.05] tracking-tight text-snow md:text-[48px]"
+              style={{ textShadow: '0 2px 18px rgba(0,0,0,0.45)' }}
+            >
+              {category.name}
+            </h1>
+            <p
+              className="mt-1 text-[12.5px] text-snow/90"
+              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}
+            >
+              {total} {total === 1 ? 'piece' : 'pieces'} in stock
+            </p>
+            {category.description ? (
+              <p
+                className="mt-2 max-w-[65ch] text-[13px] leading-[1.55] text-snow/90"
+                style={{ textShadow: '0 1px 8px rgba(0,0,0,0.45)' }}
+              >
+                {category.description}
+              </p>
+            ) : null}
+          </div>
         </div>
-      ) : null}
-
-      <header className="px-5 py-4 md:px-8 md:py-6">
-        <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink-900 md:text-[36px]">
-          {category.name}
-        </h1>
-        <p className="mt-1 text-[12.5px] text-ink-500">
-          {total} {total === 1 ? 'piece' : 'pieces'} in stock
-        </p>
-        {category.description ? (
-          <p className="mt-2 max-w-[65ch] text-[13px] leading-[1.55] text-ink-600">
-            {category.description}
+      ) : (
+        // Fallback for categories without a hero image — old layout with dark
+        // text on the page background, matching the rest of the site.
+        <header className="px-5 py-4 md:px-8 md:py-6">
+          <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink-900 md:text-[36px]">
+            {category.name}
+          </h1>
+          <p className="mt-1 text-[12.5px] text-ink-500">
+            {total} {total === 1 ? 'piece' : 'pieces'} in stock
           </p>
-        ) : null}
-      </header>
+          {category.description ? (
+            <p className="mt-2 max-w-[65ch] text-[13px] leading-[1.55] text-ink-600">
+              {category.description}
+            </p>
+          ) : null}
+        </header>
+      )}
 
       <CategoryFilterBar
         slug={slug}

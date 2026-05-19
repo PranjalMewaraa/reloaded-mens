@@ -11,7 +11,7 @@ export default function ShippingPage() {
       <h2>Delivery times</h2>
       <p>
         Metros: 3–5 business days. Other serviceable pincodes: 5–7 business days. We dispatch
-        from our Bengaluru warehouse Monday to Saturday.
+        from our Ghaziabad warehouse Monday to Saturday.
       </p>
       <h2>Shipping fees</h2>
       <p>
