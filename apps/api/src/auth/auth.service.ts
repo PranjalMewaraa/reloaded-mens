@@ -42,6 +42,7 @@ export class AuthService {
   private readonly refreshTtl: string;
   private readonly stageTtl: string;
   private readonly isProd: boolean;
+  private readonly cookieDomain: string | undefined;
   // When false, /auth/login short-circuits the TOTP step and issues a session immediately.
   // Defaults to true (secure-by-default). MVP local/dev sets this to false in .env.
   readonly totpRequired: boolean;
@@ -58,6 +59,8 @@ export class AuthService {
     this.stageTtl = config.get<string>('JWT_STAGE_TTL') ?? '5m';
     this.isProd = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
     this.totpRequired = parseBool(config.get<string>('ADMIN_TOTP_REQUIRED'), true);
+    const rawDomain = config.get<string>('COOKIE_DOMAIN');
+    this.cookieDomain = rawDomain && rawDomain.trim() !== '' ? rawDomain.trim() : undefined;
   }
 
   // Returns the AdminUser if credentials valid and the account is active, else null.
@@ -67,6 +70,15 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     return ok ? user : null;
   }
+  private cookieOptions(path: string) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: this.isProd,
+    domain: this.cookieDomain,
+    path,
+  };
+}
 
   signAccess(userId: string): string {
     const payload: JwtAccessPayload = { sub: userId, type: 'access' };
@@ -96,57 +108,45 @@ export class AuthService {
   }
 
   // Sets the long-lived session cookies for an authenticated admin.
-  issueSession(res: Response, userId: string) {
-    const access = this.signAccess(userId);
-    const refresh = this.signRefresh(userId);
+issueSession(res: Response, userId: string) {
+  const access = this.signAccess(userId);
+  const refresh = this.signRefresh(userId);
 
-    res.cookie(ACCESS_COOKIE, access, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: COOKIE_PATHS.access,
-      maxAge: durationToMs(this.accessTtl),
-    });
-    res.cookie(REFRESH_COOKIE, refresh, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: COOKIE_PATHS.refresh,
-      maxAge: durationToMs(this.refreshTtl),
-    });
-  }
+  res.cookie(ACCESS_COOKIE, access, {
+    ...this.cookieOptions(COOKIE_PATHS.access),
+    maxAge: durationToMs(this.accessTtl),
+  });
+  res.cookie(REFRESH_COOKIE, refresh, {
+    ...this.cookieOptions(COOKIE_PATHS.refresh),
+    maxAge: durationToMs(this.refreshTtl),
+  });
+}
 
-  issueStage(res: Response, userId: string, step: StageStep) {
-    const token = this.signStage(userId, step);
-    res.cookie(STAGE_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: COOKIE_PATHS.stage,
-      maxAge: durationToMs(this.stageTtl),
-    });
-  }
+issueStage(res: Response, userId: string, step: StageStep) {
+  const token = this.signStage(userId, step);
+  res.cookie(STAGE_COOKIE, token, {
+    ...this.cookieOptions(COOKIE_PATHS.stage),
+    maxAge: durationToMs(this.stageTtl),
+  });
+}
 
-  reissueAccess(res: Response, userId: string) {
-    const access = this.signAccess(userId);
-    res.cookie(ACCESS_COOKIE, access, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: COOKIE_PATHS.access,
-      maxAge: durationToMs(this.accessTtl),
-    });
-  }
+reissueAccess(res: Response, userId: string) {
+  const access = this.signAccess(userId);
+  res.cookie(ACCESS_COOKIE, access, {
+    ...this.cookieOptions(COOKIE_PATHS.access),
+    maxAge: durationToMs(this.accessTtl),
+  });
+}
 
-  clearSession(res: Response) {
-    res.clearCookie(ACCESS_COOKIE, { path: COOKIE_PATHS.access });
-    res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATHS.refresh });
-    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage });
-  }
+clearSession(res: Response) {
+  res.clearCookie(ACCESS_COOKIE, this.cookieOptions(COOKIE_PATHS.access));
+  res.clearCookie(REFRESH_COOKIE, this.cookieOptions(COOKIE_PATHS.refresh));
+  res.clearCookie(STAGE_COOKIE, this.cookieOptions(COOKIE_PATHS.stage));
+}
 
-  clearStage(res: Response) {
-    res.clearCookie(STAGE_COOKIE, { path: COOKIE_PATHS.stage });
-  }
+clearStage(res: Response) {
+  res.clearCookie(STAGE_COOKIE, this.cookieOptions(COOKIE_PATHS.stage));
+}
 
   async loadActiveUser(userId: string) {
     const user = await prisma.adminUser.findUnique({ where: { id: userId } });

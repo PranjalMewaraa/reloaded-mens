@@ -56,6 +56,7 @@ export class CustomerAuthService {
   private readonly accessTtl: string;
   private readonly refreshTtl: string;
   private readonly isProd: boolean;
+  private readonly cookieDomain: string | undefined;
   private readonly otpTtlMinutes: number;
   private readonly otpMaxAttempts: number;
   private readonly devFallbackEmail: string | null;
@@ -75,6 +76,8 @@ export class CustomerAuthService {
     this.accessTtl = config.get<string>('JWT_CUSTOMER_ACCESS_TTL') ?? '15m';
     this.refreshTtl = config.get<string>('JWT_CUSTOMER_REFRESH_TTL') ?? '30d';
     this.isProd = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    const rawDomain = config.get<string>('COOKIE_DOMAIN');
+    this.cookieDomain = rawDomain && rawDomain.trim() !== '' ? rawDomain.trim() : undefined;
     this.otpTtlMinutes = numberOr(config.get<string>('CUSTOMER_OTP_TTL_MINUTES'), 10);
     this.otpMaxAttempts = numberOr(config.get<string>('CUSTOMER_OTP_MAX_ATTEMPTS'), 5);
     // Dev-only fallback email — used when the customer's phone has no email on
@@ -82,6 +85,15 @@ export class CustomerAuthService {
     this.devFallbackEmail = config.get<string>('CUSTOMER_OTP_DEV_FALLBACK_EMAIL') ?? null;
   }
 
+      private cookieOptions(path: string) {
+        return {
+          httpOnly: true,
+          sameSite: 'lax' as const,
+          secure: this.isProd,
+          domain: this.cookieDomain,
+          path,
+        };
+      }
   // =====================================================
   // OTP issue
   // =====================================================
@@ -260,39 +272,29 @@ export class CustomerAuthService {
   }
 
   issueSession(res: Response, customerId: string, sessionVersion: number) {
-    const access = this.signAccess(customerId);
-    const refresh = this.signRefresh(customerId, sessionVersion);
-    res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: CUSTOMER_COOKIE_PATHS.access,
-      maxAge: durationToMs(this.accessTtl),
-    });
-    res.cookie(CUSTOMER_REFRESH_COOKIE, refresh, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: CUSTOMER_COOKIE_PATHS.refresh,
-      maxAge: durationToMs(this.refreshTtl),
-    });
-  }
+  const access = this.signAccess(customerId);
+  const refresh = this.signRefresh(customerId, sessionVersion);
+  res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
+    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.access),
+    maxAge: durationToMs(this.accessTtl),
+  });
+  res.cookie(CUSTOMER_REFRESH_COOKIE, refresh, {
+    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.refresh),
+    maxAge: durationToMs(this.refreshTtl),
+  });
+}
+reissueAccess(res: Response, customerId: string) {
+  const access = this.signAccess(customerId);
+  res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
+    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.access),
+    maxAge: durationToMs(this.accessTtl),
+  });
+}
 
-  reissueAccess(res: Response, customerId: string) {
-    const access = this.signAccess(customerId);
-    res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: this.isProd,
-      path: CUSTOMER_COOKIE_PATHS.access,
-      maxAge: durationToMs(this.accessTtl),
-    });
-  }
-
-  clearSession(res: Response) {
-    res.clearCookie(CUSTOMER_ACCESS_COOKIE, { path: CUSTOMER_COOKIE_PATHS.access });
-    res.clearCookie(CUSTOMER_REFRESH_COOKIE, { path: CUSTOMER_COOKIE_PATHS.refresh });
-  }
+ clearSession(res: Response) {
+  res.clearCookie(CUSTOMER_ACCESS_COOKIE, this.cookieOptions(CUSTOMER_COOKIE_PATHS.access));
+  res.clearCookie(CUSTOMER_REFRESH_COOKIE, this.cookieOptions(CUSTOMER_COOKIE_PATHS.refresh));
+}
 
   // =====================================================
   // Refresh
