@@ -26,7 +26,7 @@ const ANNOUNCEMENTS = [
   'Free shipping on orders over ₹1,499',
   '14-day returns, no questions asked',
   'Order by 4pm for same-day dispatch',
-  'Hand-finished in Bengaluru',
+  'Try in-store at our Ghaziabad shop',
   'WhatsApp us for sizing help',
 ];
 

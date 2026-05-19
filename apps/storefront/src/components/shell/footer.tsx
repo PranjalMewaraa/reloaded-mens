@@ -32,8 +32,8 @@ export function Footer() {
               {env.NEXT_PUBLIC_BRAND_NAME}.
             </div>
             <p className="mt-2 max-w-[36ch] text-[13px] leading-[1.6] text-ink-600">
-              Menswear made for everyday wear. Considered fabrics, honest pricing, shipped from
-              Bengaluru.
+              Menswear made for everyday wear. Hand-picked, honest pricing, shipped from
+              Delhi NCR.
             </p>
             <a
               href={whatsappHref}

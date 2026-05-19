@@ -137,7 +137,7 @@ export class MockShippingProvider implements ShippingProviderImpl {
         </tbody>
       </table>
       <p class="footer">
-        From Reloaded · Bengaluru. Returns within 14 days — see reloaded.example/returns.
+        From Reloaded · Ghaziabad. Returns within 14 days — see reloaded.example/returns.
         Please ensure outer packaging is intact upon delivery.
       </p>
     </div>

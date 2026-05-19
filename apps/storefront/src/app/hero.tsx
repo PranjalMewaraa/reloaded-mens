@@ -54,8 +54,8 @@ export function Hero() {
           <span className="italic">fashion.</span>
         </h1>
         <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
-          Considered cuts in honest fabrics. Made for daily wear, priced without
-          the middlemen. Shipped from Bengaluru.
+          Hand-picked menswear in honest fabrics. Made for daily wear, priced
+          without the typical retail markup. Shipped from Delhi NCR.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button asChild size="lg">

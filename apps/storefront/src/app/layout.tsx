@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     template: `%s · ${env.NEXT_PUBLIC_BRAND_NAME}`,
   },
   description:
-    'Considered menswear from Bengaluru. Shirts, trousers, and knitwear in honest fabrics with honest pricing.',
+    'Hand-picked menswear from Delhi NCR. Shirts, trousers, and knitwear in honest fabrics with honest pricing.',
   metadataBase: new URL(env.NEXT_PUBLIC_STOREFRONT_URL),
 };
 

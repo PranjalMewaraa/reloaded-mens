@@ -609,7 +609,7 @@ function MethodStep({
           {
             v: RETURN_METHOD.STORE_DROPOFF,
             label: 'Store dropoff',
-            desc: 'Drop off at our Bengaluru store',
+            desc: 'Drop off at our Ghaziabad store',
           },
         ].map((opt) => (
           <label
