@@ -14,6 +14,7 @@ import { Footer } from './footer';
 import { Header } from './header';
 import { FirstVisitPincodePrompt, PincodeModal } from '@/components/pincode/pincode-modal';
 import { Marquee } from '@/components/marquee';
+import { WhatsAppFab } from '@/components/whatsapp-fab';
 import { CartProvider } from '@/lib/cart-context';
 import { CustomerProvider } from '@/lib/customer-context';
 import { PincodeProvider } from '@/lib/pincode-context';
@@ -90,6 +91,7 @@ function Inner({
       <BottomNav />
       <PincodeModal open={pincodeOpen} onOpenChange={setPincodeOpen} allowSkip />
       <FirstVisitPincodePrompt />
+      <WhatsAppFab />
       <Toaster richColors position="top-right" />
     </div>
   );
