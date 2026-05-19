@@ -112,20 +112,14 @@ const config: Config = {
           '0%': { backgroundPosition: '-600px 0' },
           '100%': { backgroundPosition: '600px 0' },
         },
-        // The `Marquee` component duplicates its inner strip so a -50% translate
-        // lands the second copy in the position the first one started at — the
-        // wrap is invisible. Keep the translate at exactly -50%; anything else
-        // and you see the seam jump.
-        marquee: {
-          from: { transform: 'translateX(0)' },
-          to: { transform: 'translateX(-50%)' },
-        },
+        // NOTE: the `marquee` keyframe lives in globals.css, not here.
+        // Tailwind purges keyframes that aren't referenced by an `animate-*`
+        // class in source files, and the Marquee component uses an inline
+        // `style={{ animation }}` for per-instance speed — invisible to the
+        // content scanner. globals.css ships unconditionally.
       },
       animation: {
         shimmer: 'shimmer 1.6s linear infinite',
-        // Default-speed marquee — Marquee component overrides via inline style
-        // when callers want to tune it.
-        marquee: 'marquee 40s linear infinite',
       },
       letterSpacing: {
         tight: '-0.025em',

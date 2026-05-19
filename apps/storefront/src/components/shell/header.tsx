@@ -37,22 +37,9 @@ export function Header({ navCategories, onChangePincode }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-ink-100 bg-bone/90 backdrop-blur-md">
-      {/* Desktop announcement bar */}
-      <div className="hidden bg-ink-900 text-snow md:block">
-        <div className="mx-auto flex h-9 max-w-[1400px] items-center justify-between px-8 text-[11.5px]">
-          <span className="font-mono uppercase tracking-caps text-snow/80">
-            Free shipping over ₹1,499 · Easy 14-day returns
-          </span>
-          <a
-            href={`https://wa.me/${env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/[^0-9]/g, '')}`}
-            target="_blank"
-            rel="noopener"
-            className="text-snow/80 underline-offset-4 hover:underline"
-          >
-            Chat with us
-          </a>
-        </div>
-      </div>
+      {/* (The old static desktop announcement bar lived here. Replaced by the
+          animated global Marquee mounted from store-shell.tsx — that one is
+          visible on all breakpoints, so this duplicate is gone.) */}
 
       {/* Mobile top row */}
       <div className="flex h-14 items-center justify-between px-4 md:hidden">

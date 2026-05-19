@@ -95,7 +95,7 @@ jobs:
             NEXT_PUBLIC_STOREFRONT_URL=https://reloadedmens.in
             NEXT_PUBLIC_ADMIN_API_URL=https://api.reloadedmens.in
             NEXT_PUBLIC_ADMIN_URL=https://admin.reloadedmens.in
-            NEXT_PUBLIC_BRAND_NAME=Reloaded Menswear
+            NEXT_PUBLIC_BRAND_NAME=Reloaded Mens
             NEXT_PUBLIC_WHATSAPP_NUMBER=+919958247377
 
       - name: Write deploy summary
