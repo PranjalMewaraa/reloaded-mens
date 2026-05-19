@@ -5,15 +5,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
-// Two-up tilted photo collage on the right with a scroll-linked parallax that
-// nudges each card a few pixels in opposite directions. Refs + direct
-// style.transform writes instead of React state so we don't re-render on every
-// scroll event. Reduced-motion users get the static composition.
+// Two-column hero. Left column carries the wordmark + subtitle + CTAs; right
+// column carries two tilted photo cards with scroll-linked parallax.
 //
-// Hero images are static assets in `apps/storefront/public/hero/`. Next serves
-// `/public/*` at the site root, so referencing them by absolute path works
-// without remotePatterns config. Swap the files in-place to update the hero —
-// keep the same filenames so no code change is needed.
+// The wordmark intentionally extends past the left column's boundary into
+// the right column's space — text is sized to be wider than the 5fr column
+// at desktop widths, and `whitespace-nowrap` keeps it on one line. With
+// `mix-blend-mode: difference` on white-coloured text the wordmark inverts
+// against its backdrop: appears black on the bone page background, appears
+// white where it crosses over the dark image cards. The transition at the
+// image edges is smooth — no halo or seam.
+//
+// Parallax is direct ref + style.transform writes (no React state) so we
+// don't re-render on every scroll frame. Reduced-motion users get the
+// static composition.
 const HERO_IMAGE_1 = '/hero/hero-1.jpeg';
 const HERO_IMAGE_2 = '/hero/hero-2.jpeg';
 
@@ -25,9 +30,6 @@ export function Hero() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced) return;
 
-    // The base rotate stays — we only animate translateY. Each card moves at
-    // a different rate so they "drift apart" subtly as you scroll. Small
-    // numbers (0.08–0.12) so the effect reads as polish, not a stunt.
     const apply = () => {
       const y = window.scrollY;
       const c1 = card1Ref.current;
@@ -41,76 +43,89 @@ export function Hero() {
   }, []);
 
   return (
-    // Compact padding so the hero clears in ~one viewport on a 1080p screen.
-    // Grid row height is driven by the right column's min-h — keep that and
-    // the card dimensions in sync (see RIGHT COLUMN note below).
-    <section className="grid items-center gap-5 px-5 pb-8 pt-5 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-12">
-      {/* Left column — wordmark + subtitle + CTAs */}
-      <div className="relative z-10 flex flex-col justify-center">
-        <span className="label-caps">SS26 · The first drop</span>
-        {/* WORDMARK — bold extrabold sans, tight tracking, scaled with the
-            column. Same visual language as the previous "big" treatment but
-            sized to live inside the 5fr left column instead of overflowing.
-            clamp() keeps it fluid: ~40px on phones, ~76px on desktop. */}
-        <h1
-          className="mt-2.5 select-none font-sans font-extrabold leading-[0.92] tracking-[-0.04em] text-ink-900"
-          style={{ fontSize: 'clamp(40px, 7vw, 76px)' }}
-        >
-          ReloadedMens
-        </h1>
-        <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
-          Hand-picked menswear in honest fabrics. Made for daily wear, priced
-          without the typical retail markup. Shipped from Delhi NCR.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button asChild size="lg">
-            <Link href="/shop">Shop the drop</Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link href="/visit">Visit the store</Link>
-          </Button>
-        </div>
-      </div>
+    // `isolate` creates a stacking context so the mix-blend-mode on the
+    // wordmark only blends against the hero's bg + cards, not whatever the
+    // page above paints. `overflow-hidden` clips the wordmark when it spills
+    // past the right edge of the viewport at narrow screens.
+    <section className="relative isolate overflow-hidden bg-bone">
+      <div className="grid items-center gap-5 px-5 pb-8 pt-5 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-12">
+        {/* Left column. min-w-0 stops the wide wordmark from forcing the
+            grid column to grow past its 5fr share — fr units only respect
+            content-min when min-width is auto (the default). */}
+        <div className="flex min-w-0 flex-col justify-center">
+          <span className="label-caps">SS26 · The first drop</span>
 
-      {/* RIGHT COLUMN — tilted collage.
-          The cards are absolutely positioned, so the column's height is
-          driven entirely by `min-h`. That floor needs to accommodate the
-          taller card at its top offset, otherwise the cards visually spill
-          below their container. Math, at md (column ≈ 660px wide):
-            card height = 660 × 0.46 (w) × (4/3 aspect) ≈ 405px
-            top-[14%] × 460 ≈ 64px offset
-            bottom of card 2 ≈ 469px ≤ 480 (min-h)  ✓
-          Tweaking the card width or aspect needs a matching min-h bump. */}
-      <div className="relative min-h-[320px] md:min-h-[480px]">
-        {/* Card 1 — back card, tilted left */}
-        <div
-          ref={card1Ref}
-          className="absolute left-[4%] top-[4%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
-          style={{ transform: 'rotate(-6deg)' }}
-        >
-          <Image
-            src={HERO_IMAGE_1}
-            alt=""
-            fill
-            sizes="(min-width: 768px) 28vw, 50vw"
-            className="object-cover"
-            priority
-          />
+          {/* WORDMARK — large enough to extend past its column boundary so
+              its right edge crosses into the image area. z-20 puts it above
+              the cards in the section's stacking context. text-snow +
+              mix-blend-mode: difference inverts the colour against whatever
+              backdrop it crosses, so the type stays legible on both the
+              cream page bg and the darker image cards. */}
+          <h1
+            className="relative z-20 mt-3 select-none font-sans font-extrabold leading-[0.86] tracking-[-0.045em] text-snow"
+            style={{
+              mixBlendMode: 'difference',
+              fontSize: 'clamp(56px, 13vw, 184px)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ReloadedMens
+          </h1>
+
+          {/* Subtitle + CTAs — stay inside the column (max-w on the paragraph
+              keeps them from running into the image area). z-30 so they sit
+              above the wordmark's mix-blend layer (otherwise the buttons
+              would also get inverted where they overlap). */}
+          <div className="relative z-30">
+            <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
+              Hand-picked menswear in honest fabrics. Made for daily wear, priced
+              without the typical retail markup. Shipped from Delhi NCR.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button asChild size="lg">
+                <Link href="/shop">Shop the drop</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/visit">Visit the store</Link>
+              </Button>
+            </div>
+          </div>
         </div>
-        {/* Card 2 — front card, tilted right, overlapping the first */}
-        <div
-          ref={card2Ref}
-          className="absolute right-[2%] top-[14%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
-          style={{ transform: 'rotate(5deg)' }}
-        >
-          <Image
-            src={HERO_IMAGE_2}
-            alt=""
-            fill
-            sizes="(min-width: 768px) 28vw, 50vw"
-            className="object-cover"
-            priority
-          />
+
+        {/* RIGHT COLUMN — tilted collage.
+            Cards absolute-positioned inside the column; column height comes
+            entirely from `min-h`. See math note in the previous iteration —
+            if you change the card width/aspect, bump min-h to match so the
+            cards don't visually spill below their box. */}
+        <div className="relative min-h-[320px] md:min-h-[480px]">
+          <div
+            ref={card1Ref}
+            className="absolute left-[4%] top-[4%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
+            style={{ transform: 'rotate(-6deg)' }}
+          >
+            <Image
+              src={HERO_IMAGE_1}
+              alt=""
+              fill
+              sizes="(min-width: 768px) 28vw, 50vw"
+              className="object-cover"
+              priority
+            />
+          </div>
+          <div
+            ref={card2Ref}
+            className="absolute right-[2%] top-[14%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
+            style={{ transform: 'rotate(5deg)' }}
+          >
+            <Image
+              src={HERO_IMAGE_2}
+              alt=""
+              fill
+              sizes="(min-width: 768px) 28vw, 50vw"
+              className="object-cover"
+              priority
+            />
+          </div>
         </div>
       </div>
     </section>
