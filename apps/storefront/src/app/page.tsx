@@ -9,10 +9,13 @@ import { Hero } from './hero';
 
 // Editorial marquee — purely decorative, sits between sections like a brand
 // signature. Slow-moving so it reads as a calm rhythm rather than motion.
+// Phrasing aligns with Reloaded's actual positioning: we curate and resell
+// the latest menswear, we don't manufacture — so no "made in India",
+// "slow fashion", or "curated fabrics" (which all imply craftsmanship).
 const BRAND_PHRASES = [
-  'Made in India',
-  'Curated fabrics',
-  'Slow fashion',
+  'Hand-picked',
+  'Latest drops',
+  'Best in menswear',
   'Honest pricing',
   'Drop 01',
 ];
@@ -130,8 +133,8 @@ export default async function HomePage() {
       <section className="bg-ink-900 text-snow">
         <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-6 px-5 py-10 md:grid-cols-3 md:px-8 md:py-12">
           <TrustItem
-            label="Made in India"
-            body="Cut, sewn, and finished in small workshops across Bengaluru and Tirupur."
+            label="Hand-picked"
+            body="We comb menswear for the latest worth owning. Only the pieces that pass our own fit, fabric, and finish test make the shop."
           />
           <TrustItem
             label="14-day returns"

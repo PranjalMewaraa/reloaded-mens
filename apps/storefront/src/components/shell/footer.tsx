@@ -54,7 +54,7 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col gap-2 border-t border-ink-100 pt-6 text-[11.5px] text-ink-500 md:flex-row md:items-center md:justify-between">
           <span>© {new Date().getFullYear()} {env.NEXT_PUBLIC_BRAND_NAME}. All rights reserved.</span>
-          <span className="font-mono uppercase tracking-caps">Made in India</span>
+          <span className="font-mono uppercase tracking-caps">Curated in India</span>
         </div>
       </div>
     </footer>
