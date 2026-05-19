@@ -7,7 +7,7 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import { ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
@@ -148,120 +148,136 @@ export function Pdp({ product }: PdpProps) {
 
   return (
     <div className="grid gap-8 px-5 py-6 md:grid-cols-[7fr_5fr] md:gap-12 md:px-8 md:py-8">
-      {/* Image gallery — scroll-snap carousel on the main image, thumbnails
-          below, prev/next chevrons inside the frame on desktop only.
-          aspect-[3/4] keeps the portrait fashion crop on mobile where the
-          column is narrow. On desktop the column gets ~750px wide and a
-          3:4 box towers to ~1000px tall — switch to md:aspect-square so
-          the photo lands at a sane ~750×750 instead. The Image inside
-          object-cover's whichever box ratio applies. */}
+      {/* Image gallery — two distinct layouts:
+          - Mobile (<md): scroll-snap carousel (aspect-[3/4] portrait crop)
+            with dot indicators + bottom thumbnail strip.
+          - Desktop (≥md): magazine showcase — a big square featured image
+            on the left, up to 3 thumbnails stacked vertically on the right.
+            Clicking a thumbnail swaps it into the featured slot, and the
+            previously-featured image takes its place in the thumb stack. */}
       <div>
-        <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink-50 md:aspect-square">
-          {imageCount === 0 ? (
-            <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
-              No image
-            </div>
-          ) : (
-            <div
-              ref={trackRef}
-              onScroll={handleTrackScroll}
-              className="scrollbar-hide flex h-full w-full snap-x snap-mandatory overflow-x-auto"
-            >
+        {/* MOBILE: carousel */}
+        <div className="md:hidden">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink-50">
+            {imageCount === 0 ? (
+              <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
+                No image
+              </div>
+            ) : (
+              <div
+                ref={trackRef}
+                onScroll={handleTrackScroll}
+                className="scrollbar-hide flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+              >
+                {sortedImages.map((img, idx) => (
+                  <div
+                    key={img.url}
+                    className="relative h-full w-full shrink-0 snap-center snap-always"
+                  >
+                    <Image
+                      src={img.url}
+                      alt={img.alt || product.name}
+                      fill
+                      priority={idx === 0}
+                      sizes="100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {imageCount > 0 ? (
+              <div className="pointer-events-none absolute right-3 top-3">
+                <Pill tone="snow">
+                  {activeImageIndex + 1} / {imageCount}
+                </Pill>
+              </div>
+            ) : null}
+
+            {hasMultipleImages ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+                {sortedImages.map((_, idx) => (
+                  <span
+                    key={idx}
+                    className={cn(
+                      'h-1.5 rounded-full bg-snow transition-all',
+                      idx === activeImageIndex ? 'w-5 opacity-100' : 'w-1.5 opacity-60',
+                    )}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {hasMultipleImages ? (
+            <div className="mt-3 grid grid-cols-5 gap-2">
               {sortedImages.map((img, idx) => (
-                <div
+                <button
                   key={img.url}
-                  className="relative h-full w-full shrink-0 snap-center snap-always"
+                  type="button"
+                  onClick={() => scrollToIndex(idx)}
+                  className={cn(
+                    'relative aspect-square overflow-hidden rounded-md bg-ink-50 transition',
+                    idx === activeImageIndex
+                      ? 'ring-2 ring-ink-900 ring-offset-2 ring-offset-bone'
+                      : 'opacity-70 hover:opacity-100',
+                  )}
+                  aria-label={`Image ${idx + 1}`}
+                  aria-current={idx === activeImageIndex}
                 >
                   <Image
                     src={img.url}
                     alt={img.alt || product.name}
                     fill
-                    priority={idx === 0}
-                    sizes="(min-width:768px) 40vw, 100vw"
+                    sizes="80px"
                     className="object-cover"
                   />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Counter pill — always shows position in carousel. */}
-          {imageCount > 0 ? (
-            <div className="pointer-events-none absolute right-3 top-3">
-              <Pill tone="snow">
-                {activeImageIndex + 1} / {imageCount}
-              </Pill>
-            </div>
-          ) : null}
-
-          {/* Prev / next — desktop only. Mobile users swipe natively. */}
-          {hasMultipleImages ? (
-            <>
-              <button
-                type="button"
-                onClick={() => scrollToIndex(Math.max(0, activeImageIndex - 1))}
-                disabled={activeImageIndex === 0}
-                className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-snow/85 p-2 shadow-soft backdrop-blur-sm transition hover:bg-snow disabled:opacity-0 md:flex"
-                aria-label="Previous image"
-              >
-                <ChevronLeft className="h-4 w-4 text-ink-900" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToIndex(Math.min(imageCount - 1, activeImageIndex + 1))}
-                disabled={activeImageIndex === imageCount - 1}
-                className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-snow/85 p-2 shadow-soft backdrop-blur-sm transition hover:bg-snow disabled:opacity-0 md:flex"
-                aria-label="Next image"
-              >
-                <ChevronRight className="h-4 w-4 text-ink-900" />
-              </button>
-            </>
-          ) : null}
-
-          {/* Dot indicators — visible on mobile where chevrons are hidden. */}
-          {hasMultipleImages ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5 md:hidden">
-              {sortedImages.map((_, idx) => (
-                <span
-                  key={idx}
-                  className={cn(
-                    'h-1.5 rounded-full bg-snow transition-all',
-                    idx === activeImageIndex ? 'w-5 opacity-100' : 'w-1.5 opacity-60',
-                  )}
-                />
+                </button>
               ))}
             </div>
           ) : null}
         </div>
 
-        {/* Thumbnail strip — click jumps to that frame in the carousel. */}
-        {hasMultipleImages ? (
-          <div className="mt-3 grid grid-cols-5 gap-2">
-            {sortedImages.map((img, idx) => (
-              <button
-                key={img.url}
-                type="button"
-                onClick={() => scrollToIndex(idx)}
-                className={cn(
-                  'relative aspect-square overflow-hidden rounded-md bg-ink-50 transition',
-                  idx === activeImageIndex
-                    ? 'ring-2 ring-ink-900 ring-offset-2 ring-offset-bone'
-                    : 'opacity-70 hover:opacity-100',
-                )}
-                aria-label={`Image ${idx + 1}`}
-                aria-current={idx === activeImageIndex}
-              >
-                <Image
-                  src={img.url}
-                  alt={img.alt || product.name}
-                  fill
-                  sizes="80px"
-                  className="object-cover"
-                />
-              </button>
-            ))}
-          </div>
-        ) : null}
+        {/* DESKTOP: magazine showcase. Featured image fills the left column,
+            up to 3 thumbnails stack on the right. The featured = currently-
+            active image, thumbnails = first 3 OTHER images in their original
+            order. Click a thumb to make it featured (the previous featured
+            slides into the thumb stack). */}
+        <div className="hidden md:block">
+          {imageCount === 0 ? (
+            <div className="relative aspect-square overflow-hidden rounded-xl bg-ink-50">
+              <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
+                No image
+              </div>
+            </div>
+          ) : imageCount === 1 ? (
+            // Single image — no thumbnail column, just the featured shot.
+            <div className="relative aspect-square overflow-hidden rounded-xl bg-ink-50">
+              <Image
+                src={sortedImages[0].url}
+                alt={sortedImages[0].alt || product.name}
+                fill
+                priority
+                sizes="(min-width:768px) 45vw, 100vw"
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <DesktopShowcase
+              images={sortedImages}
+              activeIndex={activeImageIndex}
+              onSelect={(i) => {
+                setActiveImageIndex(i);
+                // Keep the hidden mobile carousel scroll in sync — no-op
+                // while it's display:none, but if the viewport resizes the
+                // carousel will already be at the right frame.
+                scrollToIndex(i);
+              }}
+              productName={product.name}
+            />
+          )}
+        </div>
       </div>
 
       {/* Details */}
@@ -454,6 +470,77 @@ export function Pdp({ product }: PdpProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Magazine-style PDP gallery on desktop. Featured (active) image on the left
+// fills its column at aspect-square; up to 3 thumbnails stack on the right
+// in original-index order, excluding whichever is currently featured.
+//
+// Container aspect-[3/2] + grid-cols-[2fr_1fr] + auto-rows that divide the
+// container height evenly produces a left cell that's ~square (col is 2/3
+// of width, container is 2/3 of height ratio → cell is 1:1) and right cells
+// that are wider-than-tall rectangles. Tweak the container aspect if the
+// thumbs feel too short/tall.
+//
+// If the product has 5+ images, only the first 3 non-active appear here —
+// cycling through thumbs surfaces the others over time. Add an explicit
+// "+N more" lightbox affordance if the catalogue starts shipping > 4 photos
+// per product routinely.
+interface DesktopShowcaseProps {
+  images: Array<{ url: string; alt: string; sortOrder: number }>;
+  activeIndex: number;
+  onSelect: (index: number) => void;
+  productName: string;
+}
+
+function DesktopShowcase({ images, activeIndex, onSelect, productName }: DesktopShowcaseProps) {
+  const thumbIndices = images
+    .map((_, i) => i)
+    .filter((i) => i !== activeIndex)
+    .slice(0, 3);
+  const active = images[activeIndex] ?? images[0];
+
+  return (
+    <div
+      className="grid aspect-[3/2] gap-2 md:grid-cols-[2fr_1fr] md:gap-3"
+      style={{
+        gridTemplateRows: `repeat(${Math.max(thumbIndices.length, 1)}, minmax(0, 1fr))`,
+      }}
+    >
+      {/* Featured — spans every row of the right column visually. */}
+      <div
+        className="relative overflow-hidden rounded-xl bg-ink-50"
+        style={{ gridRow: '1 / -1' }}
+      >
+        <Image
+          src={active.url}
+          alt={active.alt || productName}
+          fill
+          priority
+          sizes="(min-width:768px) 30vw, 100vw"
+          className="object-cover"
+        />
+      </div>
+      {/* Right column thumbnails — click to swap into featured slot. */}
+      {thumbIndices.map((i) => (
+        <button
+          key={images[i].url}
+          type="button"
+          onClick={() => onSelect(i)}
+          className="relative overflow-hidden rounded-md bg-ink-50 transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900"
+          aria-label={`Show image ${i + 1} of ${images.length}`}
+        >
+          <Image
+            src={images[i].url}
+            alt={images[i].alt || productName}
+            fill
+            sizes="(min-width:768px) 15vw, 50vw"
+            className="object-cover"
+          />
+        </button>
+      ))}
     </div>
   );
 }
