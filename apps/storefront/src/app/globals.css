@@ -107,32 +107,3 @@
   display: none; /* Chrome / Safari / new Edge */
 }
 
-/*
- * Hero image float animations. Each card has its own keyframe so they drift
- * at different rates and on opposite vertical phases — the composition reads
- * as "alive" without being distracting. The perspective() + rotateY()/X() in
- * the transform produce the tilted-floating-panel look in the spec; keep
- * those values stable through the keyframe so only translateY animates.
- *
- * Lives in globals.css (not tailwind.config.ts) so Tailwind doesn't purge
- * the keyframe — see the marquee keyframe note above.
- */
-@keyframes hero-float-1 {
-  0%,
-  100% {
-    transform: perspective(1200px) rotateY(-14deg) rotateX(6deg) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: perspective(1200px) rotateY(-14deg) rotateX(6deg) translate3d(0, -14px, 0);
-  }
-}
-
-@keyframes hero-float-2 {
-  0%,
-  100% {
-    transform: perspective(1200px) rotateY(12deg) rotateX(-4deg) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: perspective(1200px) rotateY(12deg) rotateX(-4deg) translate3d(0, 14px, 0);
-  }
-}
