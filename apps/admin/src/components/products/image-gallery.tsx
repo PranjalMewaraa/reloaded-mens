@@ -218,9 +218,14 @@ export function ImageGallery({ images, onChange }: ImageGalleryProps) {
         </Button>
       </div>
       <p className="text-center font-mono text-[10.5px] uppercase tracking-caps text-ink-500">
-        JPEG · PNG · WebP — up to 5 MB each
+        JPEG · PNG · WebP · AVIF · GIF — up to 5 MB each
       </p>
 
+      {/* Explicit MIME list (not just `image/*`) so Safari + iOS file pickers
+          surface .avif files. The mobile camera input keeps `image/*` so the
+          OS shows its native camera; AVIF isn't a camera capture format
+          anyway. Keep these in sync with ALLOWED_IMAGE_MIMES in
+          apps/api/src/uploads/uploads.controller.ts. */}
       <input
         ref={cameraRef}
         type="file"
@@ -236,7 +241,7 @@ export function ImageGallery({ images, onChange }: ImageGalleryProps) {
       <input
         ref={pickerRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
         multiple
         className="hidden"
         onChange={(e) => {

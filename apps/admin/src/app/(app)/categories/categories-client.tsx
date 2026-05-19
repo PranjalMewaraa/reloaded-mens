@@ -364,10 +364,10 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
                 >
                   <Upload className="h-5 w-5" />
                   <span>{uploading ? 'Uploading…' : 'Click to upload a banner'}</span>
-                  <span className="font-mono text-[10.5px] text-ink-400">JPEG / PNG / WebP · up to 5 MB</span>
+                  <span className="font-mono text-[10.5px] text-ink-400">JPEG / PNG / WebP / AVIF / GIF · up to 5 MB</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
                     className="hidden"
                     onChange={(e) => handleImageFile(e.target.files?.[0])}
                     disabled={uploading}
