@@ -1,6 +1,12 @@
 import Link from 'next/link';
-import { MessageCircle } from 'lucide-react';
+import { Instagram, MessageCircle } from 'lucide-react';
 import { env } from '@/lib/env';
+
+// Canonical Instagram profile — the `?igsh=` tracking param Instagram adds
+// when you tap "Share this profile" is stripped so we don't ship referral
+// goo to every visitor's click.
+const INSTAGRAM_URL = 'https://www.instagram.com/reloadedmensss';
+const INSTAGRAM_HANDLE = '@reloadedmensss';
 
 const SHOP_LINKS = [
   { href: '/c/shirts', label: 'Shirts' },
@@ -45,6 +51,20 @@ export function Footer() {
               <span className="text-[13px] font-medium">Talk to a stylist on WhatsApp</span>
             </a>
             <p className="mt-2 text-[11.5px] text-ink-500">10am–8pm IST</p>
+
+            {/* Social — Instagram for now; add new platforms inline. The icon
+                + handle row is small enough to fade behind the WhatsApp CTA
+                while still being scannable. */}
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 text-[12.5px] text-ink-700 hover:text-ink-900"
+              aria-label={`Follow us on Instagram, ${INSTAGRAM_HANDLE}`}
+            >
+              <Instagram className="h-4 w-4" />
+              <span>{INSTAGRAM_HANDLE}</span>
+            </a>
           </div>
 
           <FooterColumn label="Shop" links={SHOP_LINKS} />
