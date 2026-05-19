@@ -61,16 +61,39 @@ export function Hero() {
               mix-blend-mode: difference inverts the colour against whatever
               backdrop it crosses, so the type stays legible on both the
               cream page bg and the darker image cards. */}
-          <h1
-            className="relative z-20 mt-3 select-none font-sans font-extrabold leading-[0.86] tracking-[-0.045em] text-snow"
-            style={{
-              mixBlendMode: 'difference',
-              fontSize: 'clamp(56px, 13vw, 184px)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ReloadedMens
-          </h1>
+      <div className="relative">
+  {/* Overlay Layer */}
+  <h1
+    className="absolute z-20 mt-3 select-none font-sans font-extrabold uppercase opacity-60"
+    style={{
+      mixBlendMode: 'overlay',
+      fontSize: 'clamp(64px, 13vw, 184px)',
+      whiteSpace: 'nowrap',
+      lineHeight: 0.8,
+      letterSpacing: '-0.08em',
+      WebkitTextStroke: '2px white',
+      color: 'transparent',
+    }}
+  >
+    Reloaded<br />Mens
+  </h1>
+
+  {/* Main Difference Layer */}
+  <h1
+    className="relative z-30 mt-3 select-none font-sans font-extrabold uppercase"
+    style={{
+      mixBlendMode: 'difference',
+      fontSize: 'clamp(64px, 13vw, 184px)',
+      whiteSpace: 'nowrap',
+      lineHeight: 0.8,
+      letterSpacing: '-0.08em',
+      WebkitTextStroke: '1.5px white',
+      color: 'white',
+    }}
+  >
+    Reloaded<br />Mens
+  </h1>
+</div>
 
           {/* Subtitle + CTAs — stay inside the column (max-w on the paragraph
               keeps them from running into the image area). z-30 so they sit
