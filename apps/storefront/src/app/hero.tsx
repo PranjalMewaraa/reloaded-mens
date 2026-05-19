@@ -42,19 +42,22 @@ export function Hero() {
   }, []);
 
   return (
-    <section className="grid items-center gap-6 px-5 pb-14 pt-8 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-20">
+    // Compact padding so the hero clears in ~one viewport on a 1080p screen.
+    // Grid row height is driven by the right column's min-h — keep that
+    // and the card dimensions in sync (see RIGHT COLUMN note below).
+    <section className="grid items-center gap-5 px-5 pb-8 pt-5 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-12">
       {/* Left column — headline + CTAs */}
       <div className="relative z-10 flex flex-col justify-center">
         <span className="label-caps">SS26 · The first drop</span>
-        <h1 className="mt-3 font-display text-[44px] font-semibold leading-[0.96] tracking-tight text-ink-900 md:text-[88px]">
+        <h1 className="mt-2.5 font-display text-[40px] font-semibold leading-[0.98] tracking-tight text-ink-900 md:text-[64px]">
           Our latest <br className="hidden md:block" />
           offerings.
         </h1>
-        <p className="mt-5 max-w-[42ch] text-[14px] leading-[1.55] text-ink-600 md:text-[15px]">
+        <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
           Considered cuts in honest fabrics. Made for daily wear, priced without
           the middlemen. Shipped from Bengaluru.
         </p>
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-2">
           <Button asChild size="lg">
             <Link href="/shop">Shop the drop</Link>
           </Button>
@@ -64,21 +67,27 @@ export function Hero() {
         </div>
       </div>
 
-      {/* Right column — tilted collage. `min-h` gives the absolute children a
-          predictable footprint without us measuring; the actual cards size
-          themselves via aspect-ratio. */}
-      <div className="relative min-h-[420px] md:min-h-[560px]">
+      {/* RIGHT COLUMN — tilted collage.
+          The cards are absolutely positioned, so the column's height is
+          driven entirely by `min-h`. That floor needs to accommodate the
+          taller card at its top offset, otherwise the cards visually spill
+          below their container. Math, at md (column ≈ 660px wide):
+            card height = 660 × 0.46 (w) × (4/3 aspect) ≈ 405px
+            top-[14%] × 460 ≈ 64px offset
+            bottom of card 2 ≈ 469px ≤ 480 (min-h)  ✓
+          Tweaking the card width or aspect needs a matching min-h bump. */}
+      <div className="relative min-h-[320px] md:min-h-[480px]">
         {/* Card 1 — back card, tilted left */}
         <div
           ref={card1Ref}
-          className="absolute left-[4%] top-[6%] aspect-[3/4] w-[58%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
+          className="absolute left-[4%] top-[4%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
           style={{ transform: 'rotate(-6deg)' }}
         >
           <Image
             src={HERO_IMAGE_1}
             alt=""
             fill
-            sizes="(min-width: 768px) 35vw, 60vw"
+            sizes="(min-width: 768px) 28vw, 50vw"
             className="object-cover grayscale"
             priority
           />
@@ -86,14 +95,14 @@ export function Hero() {
         {/* Card 2 — front card, tilted right, overlapping the first */}
         <div
           ref={card2Ref}
-          className="absolute right-[2%] top-[22%] aspect-[3/4] w-[58%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
+          className="absolute right-[2%] top-[14%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
           style={{ transform: 'rotate(5deg)' }}
         >
           <Image
             src={HERO_IMAGE_2}
             alt=""
             fill
-            sizes="(min-width: 768px) 35vw, 60vw"
+            sizes="(min-width: 768px) 28vw, 50vw"
             className="object-cover grayscale"
             priority
           />
