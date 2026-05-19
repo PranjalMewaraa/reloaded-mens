@@ -6,8 +6,14 @@ import { join, resolve } from 'node:path';
 import { extension as mimeExtension } from 'mime-types';
 import type { StorageProvider, UploadInput, UploadResult } from './storage.types.js';
 
-// Writes uploaded files to apps/api/uploads/<folder>/<id>.<ext> and returns a URL that
+// Writes uploaded files to <STORAGE_LOCAL_PATH>/<folder>/<id>.<ext> and returns a URL that
 // resolves through the @nestjs/serve-static mount at /files (configured in AppModule).
+//
+// IMPORTANT: rootDir MUST match the ServeStaticModule.forRoot rootPath in
+// app.module.ts. In production STORAGE_LOCAL_PATH points to /data/storage,
+// which docker-compose mounts as the api_storage named volume so uploads
+// survive container recreates. Without this env var, files would land in
+// the container's writable layer and disappear on every `docker compose up`.
 //
 // Keys are random 12-byte hex strings (24 chars) to avoid leaking originalName and to make
 // guessing other users' uploads infeasible.
@@ -19,7 +25,11 @@ export class LocalStorageProvider implements StorageProvider {
   private readonly publicBase: string;
 
   constructor(private readonly config: ConfigService) {
-    this.rootDir = resolve(process.cwd(), 'uploads');
+    const storagePath = this.config.get<string>('STORAGE_LOCAL_PATH')?.trim();
+    this.rootDir =
+      storagePath && storagePath.length > 0
+        ? storagePath
+        : resolve(process.cwd(), 'uploads');
     const publicApiUrl = (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:4000')
       .trim()
       .replace(/\/+$/, '');

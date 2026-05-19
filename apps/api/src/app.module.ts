@@ -36,8 +36,14 @@ ConfigModule.forRoot({
 }),
     // Public file serving for LocalStorageProvider. Mounted at /files (outside the
     // /api/v1 global prefix — see main.ts setGlobalPrefix exclude).
+    //
+    // rootPath MUST match LocalStorageProvider's STORAGE_LOCAL_PATH so writes
+    // and reads point to the same directory. In production the docker-compose
+    // file mounts a named volume at /data/storage; STORAGE_LOCAL_PATH points
+    // there, and uploads survive container recreates. In dev the env is
+    // unset and we fall back to apps/api/uploads under cwd.
     ServeStaticModule.forRoot({
-      rootPath: resolve(process.cwd(), 'uploads'),
+      rootPath: resolveStoragePath(),
       serveRoot: '/files',
       serveStaticOptions: { fallthrough: false, index: false },
     }),
@@ -66,3 +72,14 @@ ConfigModule.forRoot({
   controllers: [HealthController],
 })
 export class AppModule {}
+
+// Mirrors the same logic in LocalStorageProvider — kept here as a top-level
+// helper so ServeStaticModule.forRoot() can resolve the path synchronously
+// without a ConfigService dependency (ServeStatic doesn't support
+// forRootAsync in our version). Reads STORAGE_LOCAL_PATH directly from
+// process.env, which docker-compose populates from env_file before Node
+// starts. Falls back to <cwd>/uploads for local dev.
+function resolveStoragePath(): string {
+  const fromEnv = process.env.STORAGE_LOCAL_PATH?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : resolve(process.cwd(), 'uploads');
+}
