@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ProductCard, type ProductCardData } from '@/components/product/product-card';
 import { publicApi } from '@/lib/api';
 import { env } from '@/lib/env';
+import { Hero } from './hero';
 
 interface PublicListResponse {
   items: ProductCardData[];
@@ -29,32 +29,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px]">
-      {/* Hero */}
-      <section className="grid gap-6 px-5 pb-12 pt-6 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-16">
-        <div className="flex flex-col justify-center">
-          <span className="label-caps">SS26 · The first drop</span>
-          <h1 className="mt-3 font-display text-[44px] font-semibold leading-[1.04] tracking-tight text-ink-900 md:text-[72px]">
-            Clothes for the men who wear them.
-          </h1>
-          <p className="mt-4 max-w-[52ch] text-[15px] leading-[1.6] text-ink-600">
-            Considered cuts in honest fabrics. Made for daily wear, priced without the
-            middlemen. Shipped from Bengaluru.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button asChild size="lg">
-              <Link href="/c/shirts">Shop the drop</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/visit">Visit the store</Link>
-            </Button>
-          </div>
-        </div>
-        <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-ink-100 md:aspect-[5/6]">
-          <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
-            Hero photo
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Featured categories */}
       {categories.length > 0 ? (
