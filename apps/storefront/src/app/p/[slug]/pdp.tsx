@@ -150,13 +150,13 @@ export function Pdp({ product }: PdpProps) {
     <div className="grid gap-8 px-5 py-6 md:grid-cols-[7fr_5fr] md:gap-12 md:px-8 md:py-8">
       {/* Image gallery — scroll-snap carousel on the main image, thumbnails
           below, prev/next chevrons inside the frame on desktop only.
-          aspect-[3/4] keeps the portrait fashion crop on mobile; on desktop
-          the column gets so wide that 3:4 produces a ~1000px tall image
-          that eats the viewport — md:max-h caps the frame so the photo
-          stays a reasonable height regardless of column width. The Image
-          inside still object-cover-fills the box at whatever final size. */}
+          aspect-[3/4] keeps the portrait fashion crop on mobile where the
+          column is narrow. On desktop the column gets ~750px wide and a
+          3:4 box towers to ~1000px tall — switch to md:aspect-square so
+          the photo lands at a sane ~750×750 instead. The Image inside
+          object-cover's whichever box ratio applies. */}
       <div>
-        <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink-50 md:max-h-[640px]">
+        <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink-50 md:aspect-square">
           {imageCount === 0 ? (
             <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
               No image
