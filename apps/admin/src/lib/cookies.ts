@@ -72,6 +72,9 @@ export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
         name: parsed.name,
         value: '',
         path: parsed.path,
+        // Match the original Domain so the browser clears the right cookie.
+        // Skipping this leaves a zombie cookie on the parent domain.
+        domain: parsed.domain,
         maxAge: 0,
       });
       continue;
@@ -81,6 +84,12 @@ export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
       name: parsed.name,
       value: parsed.value,
       path: parsed.path,
+      // Forward Domain (e.g. `.reloadedmens.in`) so the same cookie is valid
+      // on every subdomain — required for client-side fetches from
+      // admin.reloadedmens.in to api.reloadedmens.in to carry credentials.
+      // Without this the mirrored cookie is host-only on admin.* and api.*
+      // calls arrive without auth.
+      domain: parsed.domain,
       maxAge: parsed.maxAge,
       expires: parsed.expires,
       httpOnly: parsed.httpOnly,

@@ -218,15 +218,32 @@ export class AuthController {
     return { ok: true };
   }
 
-  // POST /auth/logout — clears cookies. Idempotent.
+  // POST /auth/logout — clears cookies. Idempotent: must succeed even when
+  // the access cookie is expired/invalid/missing. Previously this was guarded
+  // by JwtAccessGuard, which 401'd stale-cookie logout attempts — the api
+  // never sent Set-Cookie clears, the admin's mirror saw an empty array, the
+  // browser kept the cookie, and the user stayed logged in.
   @Post('logout')
   @HttpCode(200)
-  @UseGuards(JwtAccessGuard)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const user = req.user as AuthedUser;
-    const ctx = reqContext(req);
+    // Best-effort decode of the access cookie so we can audit-log which admin
+    // signed out. Missing/invalid cookie just means we log without a userId.
+    let adminUserId: string | undefined;
+    const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+    const token = cookies?.['access_token'];
+    if (token) {
+      try {
+        adminUserId = this.auth.verifyAccess(token).sub;
+      } catch {
+        // Invalid or expired — fall through and clear anyway.
+      }
+    }
+
     this.auth.clearSession(res);
-    await this.audit.write(AUDIT_EVENT_TYPE.ADMIN_LOGOUT, { ...ctx, adminUserId: user.id });
+    await this.audit.write(AUDIT_EVENT_TYPE.ADMIN_LOGOUT, {
+      ...reqContext(req),
+      ...(adminUserId ? { adminUserId } : {}),
+    });
     return { ok: true };
   }
 

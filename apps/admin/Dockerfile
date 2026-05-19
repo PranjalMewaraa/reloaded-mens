@@ -59,6 +59,24 @@ ENV NEXT_PUBLIC_STOREFRONT_URL=${NEXT_PUBLIC_STOREFRONT_URL}
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm turbo run build --filter=@repo/admin
 
+# Belt-and-suspenders for the Prisma engine binary. Even with the
+# `outputFileTracingIncludes` config in next.config.ts, Next's standalone
+# tracer has historically been flaky about `.so.node` files. After the build
+# we explicitly mirror the engine binary + generated client from the
+# builder's pnpm store into the matching path inside the standalone tree.
+# The glob walks whatever `@prisma+client@<version>_prisma@<version>` dir
+# pnpm produced, so this stays valid across Prisma upgrades.
+RUN set -eux; \
+    for src_dir in /app/node_modules/.pnpm/@prisma+client@*/node_modules/.prisma; do \
+        rel="${src_dir#/app/}"; \
+        dest="/app/apps/admin/.next/standalone/${rel}"; \
+        mkdir -p "$(dirname "$dest")"; \
+        # rm first so `cp -a src dest` replaces (instead of nesting into
+        # an existing dir that the tracer may have stubbed out).
+        rm -rf "$dest"; \
+        cp -a "$src_dir" "$dest"; \
+    done
+
 # ------------------- runner -------------------
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -66,6 +84,11 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# openssl for Prisma's query-engine on Alpine (linux-musl-openssl-3.0.x).
+# Without this the engine .so.node loads but errors at first query with
+# `Error loading shared library libssl.so.3`.
+RUN apk add --no-cache openssl
 
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs

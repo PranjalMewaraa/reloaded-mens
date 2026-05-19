@@ -272,24 +272,37 @@ export class CustomerAuthService {
   }
 
   issueSession(res: Response, customerId: string, sessionVersion: number) {
-  const access = this.signAccess(customerId);
-  const refresh = this.signRefresh(customerId, sessionVersion);
-  res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
-    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.access),
-    maxAge: durationToMs(this.accessTtl),
-  });
-  res.cookie(CUSTOMER_REFRESH_COOKIE, refresh, {
-    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.refresh),
-    maxAge: durationToMs(this.refreshTtl),
-  });
-}
-reissueAccess(res: Response, customerId: string) {
-  const access = this.signAccess(customerId);
-  res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
-    ...this.cookieOptions(CUSTOMER_COOKIE_PATHS.access),
-    maxAge: durationToMs(this.accessTtl),
-  });
-}
+    const access = this.signAccess(customerId);
+    const refresh = this.signRefresh(customerId, sessionVersion);
+    res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.isProd,
+      domain: this.cookieDomain,
+      path: CUSTOMER_COOKIE_PATHS.access,
+      maxAge: durationToMs(this.accessTtl),
+    });
+    res.cookie(CUSTOMER_REFRESH_COOKIE, refresh, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.isProd,
+      domain: this.cookieDomain,
+      path: CUSTOMER_COOKIE_PATHS.refresh,
+      maxAge: durationToMs(this.refreshTtl),
+    });
+  }
+
+  reissueAccess(res: Response, customerId: string) {
+    const access = this.signAccess(customerId);
+    res.cookie(CUSTOMER_ACCESS_COOKIE, access, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.isProd,
+      domain: this.cookieDomain,
+      path: CUSTOMER_COOKIE_PATHS.access,
+      maxAge: durationToMs(this.accessTtl),
+    });
+  }
 
  clearSession(res: Response) {
   res.clearCookie(CUSTOMER_ACCESS_COOKIE, this.cookieOptions(CUSTOMER_COOKIE_PATHS.access));

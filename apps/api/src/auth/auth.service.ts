@@ -58,6 +58,7 @@ export class AuthService {
     this.refreshTtl = config.get<string>('JWT_REFRESH_TTL') ?? '30d';
     this.stageTtl = config.get<string>('JWT_STAGE_TTL') ?? '5m';
     this.isProd = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    this.cookieDomain = config.get<string>('COOKIE_DOMAIN') || undefined;
     this.totpRequired = parseBool(config.get<string>('ADMIN_TOTP_REQUIRED'), true);
     const rawDomain = config.get<string>('COOKIE_DOMAIN');
     this.cookieDomain = rawDomain && rawDomain.trim() !== '' ? rawDomain.trim() : undefined;
