@@ -7,7 +7,7 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import { MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
@@ -49,6 +49,24 @@ export function Pdp({ product }: PdpProps) {
   );
   const [activeImageIndex, setActiveImageIndex] = React.useState(0);
   const { addItem } = useCart();
+
+  // Carousel scroll handling. We don't pull in embla / swiper — the native
+  // CSS scroll-snap + scrollTo gives a clean swipe on mobile and arrow-button
+  // navigation on desktop without any animation lib. The track only listens
+  // to scroll events to keep the active dot/counter in sync; thumbnails and
+  // prev/next buttons call scrollToIndex() directly.
+  const trackRef = React.useRef<HTMLDivElement>(null);
+  const scrollToIndex = React.useCallback((i: number) => {
+    const c = trackRef.current;
+    if (!c) return;
+    c.scrollTo({ left: c.clientWidth * i, behavior: 'smooth' });
+  }, []);
+  const handleTrackScroll = React.useCallback(() => {
+    const c = trackRef.current;
+    if (!c || c.clientWidth === 0) return;
+    const i = Math.round(c.scrollLeft / c.clientWidth);
+    if (i !== activeImageIndex) setActiveImageIndex(i);
+  }, [activeImageIndex]);
 
   // Variant selection. We pick the first in-stock variant by default so the price
   // displayed reflects something the customer can actually buy.
@@ -125,38 +143,103 @@ export function Pdp({ product }: PdpProps) {
     toast.success(`Added to bag · ${variantLabel ?? product.name}`);
   }
 
+  const hasMultipleImages = sortedImages.length > 1;
+  const imageCount = sortedImages.length;
+
   return (
-    <div className="grid gap-8 px-5 py-6 md:grid-cols-[7fr_5fr] md:gap-12 md:px-8 md:py-8">
-      {/* Image gallery */}
-      <div>
+    // Grid rebalanced to 1:1 (was 7:5) so the image stops dominating on wide
+    // screens. The image column has a max-w cap and self-centers to its
+    // column so it doesn't blow up on ultrawide either.
+    <div className="grid gap-8 px-5 py-6 md:grid-cols-[1fr_1fr] md:gap-12 md:px-8 md:py-8">
+      {/* Image gallery — scroll-snap carousel on the main image, thumbnails
+          below, prev/next chevrons inside the frame on desktop only. */}
+      <div className="md:mx-auto md:w-full md:max-w-[520px]">
         <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-ink-50">
-          {sortedImages[activeImageIndex] ? (
-            <Image
-              src={sortedImages[activeImageIndex].url}
-              alt={sortedImages[activeImageIndex].alt || product.name}
-              fill
-              priority={activeImageIndex === 0}
-              sizes="(min-width:1024px) 56vw, 100vw"
-              className="object-cover"
-            />
-          ) : (
+          {imageCount === 0 ? (
             <div className="absolute inset-0 grid place-items-center font-mono text-[10.5px] uppercase tracking-caps text-ink-300">
               No image
             </div>
+          ) : (
+            <div
+              ref={trackRef}
+              onScroll={handleTrackScroll}
+              className="scrollbar-hide flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+            >
+              {sortedImages.map((img, idx) => (
+                <div
+                  key={img.url}
+                  className="relative h-full w-full shrink-0 snap-center snap-always"
+                >
+                  <Image
+                    src={img.url}
+                    alt={img.alt || product.name}
+                    fill
+                    priority={idx === 0}
+                    sizes="(min-width:768px) 40vw, 100vw"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
+            </div>
           )}
-          <div className="absolute right-3 top-3">
-            <Pill tone="snow">
-              {Math.min(activeImageIndex + 1, sortedImages.length || 1)} / {Math.max(sortedImages.length, 1)}
-            </Pill>
-          </div>
+
+          {/* Counter pill — always shows position in carousel. */}
+          {imageCount > 0 ? (
+            <div className="pointer-events-none absolute right-3 top-3">
+              <Pill tone="snow">
+                {activeImageIndex + 1} / {imageCount}
+              </Pill>
+            </div>
+          ) : null}
+
+          {/* Prev / next — desktop only. Mobile users swipe natively. */}
+          {hasMultipleImages ? (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollToIndex(Math.max(0, activeImageIndex - 1))}
+                disabled={activeImageIndex === 0}
+                className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-snow/85 p-2 shadow-soft backdrop-blur-sm transition hover:bg-snow disabled:opacity-0 md:flex"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="h-4 w-4 text-ink-900" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToIndex(Math.min(imageCount - 1, activeImageIndex + 1))}
+                disabled={activeImageIndex === imageCount - 1}
+                className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-snow/85 p-2 shadow-soft backdrop-blur-sm transition hover:bg-snow disabled:opacity-0 md:flex"
+                aria-label="Next image"
+              >
+                <ChevronRight className="h-4 w-4 text-ink-900" />
+              </button>
+            </>
+          ) : null}
+
+          {/* Dot indicators — visible on mobile where chevrons are hidden. */}
+          {hasMultipleImages ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5 md:hidden">
+              {sortedImages.map((_, idx) => (
+                <span
+                  key={idx}
+                  className={cn(
+                    'h-1.5 rounded-full bg-snow transition-all',
+                    idx === activeImageIndex ? 'w-5 opacity-100' : 'w-1.5 opacity-60',
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
-        {sortedImages.length > 1 ? (
+
+        {/* Thumbnail strip — click jumps to that frame in the carousel. */}
+        {hasMultipleImages ? (
           <div className="mt-3 grid grid-cols-5 gap-2">
             {sortedImages.map((img, idx) => (
               <button
                 key={img.url}
                 type="button"
-                onClick={() => setActiveImageIndex(idx)}
+                onClick={() => scrollToIndex(idx)}
                 className={cn(
                   'relative aspect-square overflow-hidden rounded-md bg-ink-50 transition',
                   idx === activeImageIndex
@@ -164,6 +247,7 @@ export function Pdp({ product }: PdpProps) {
                     : 'opacity-70 hover:opacity-100',
                 )}
                 aria-label={`Image ${idx + 1}`}
+                aria-current={idx === activeImageIndex}
               >
                 <Image
                   src={img.url}
