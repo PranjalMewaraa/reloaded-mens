@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,21 @@ export default async function HomePage() {
                 href={`/c/${c.slug}`}
                 className="group relative aspect-square overflow-hidden rounded-md bg-ink-100"
               >
+                {c.imageUrl ? (
+                  <Image
+                    src={c.imageUrl}
+                    alt={c.name}
+                    fill
+                    // 2 cols on mobile (≈50vw), 4 cols on md+ (≈25vw). Lets
+                    // Next pick a sensibly-sized candidate from the optimizer.
+                    sizes="(min-width: 768px) 25vw, 50vw"
+                    className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                ) : null}
+                {/* Bottom-anchored gradient so the white name pill stays
+                    readable over bright or busy photos. Sits between the
+                    image and the pill in the stacking order. */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent" />
                 <div className="absolute inset-0 grid place-items-end p-3">
                   <span className="rounded-full bg-snow/85 px-2.5 py-1 text-[12px] font-medium text-ink-900 backdrop-blur-sm">
                     {c.name}
