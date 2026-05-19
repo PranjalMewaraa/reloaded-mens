@@ -20,9 +20,28 @@ export class LocalStorageProvider implements StorageProvider {
 
   constructor(private readonly config: ConfigService) {
     this.rootDir = resolve(process.cwd(), 'uploads');
-    const publicApiUrl = (this.config.get<string>('PUBLIC_API_URL') ?? 'http://localhost:4000')
-      .trim()
-      .replace(/\/+$/, '');
+
+    // PUBLIC_API_URL is stamped into every upload URL we persist. If it ever
+    // silently defaults to localhost in production, the host gets baked into
+    // Category.imageUrl / Product.images[].url rows and customers see broken
+    // images — fixing it later requires a SQL rewrite of the affected rows.
+    // Fail loudly here instead of carrying a confusing default forward.
+    const raw = this.config.get<string>('PUBLIC_API_URL');
+    const isProd = (this.config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    if (!raw || raw.trim().length === 0) {
+      if (isProd) {
+        throw new Error(
+          'PUBLIC_API_URL is required in production. Add it to .env on the VPS ' +
+            '(e.g. PUBLIC_API_URL=https://api.reloadedmens.in) and restart the api ' +
+            'container. Without it every upload URL would be stamped with localhost.',
+        );
+      }
+      // Dev convenience — keep the localhost default so `pnpm dev` works out of the box.
+      console.warn(
+        '[LocalStorageProvider] PUBLIC_API_URL not set — defaulting to http://localhost:4000 (dev only).',
+      );
+    }
+    const publicApiUrl = (raw ?? 'http://localhost:4000').trim().replace(/\/+$/, '');
     this.publicBase = `${publicApiUrl}/files`;
   }
 
