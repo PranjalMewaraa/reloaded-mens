@@ -50,8 +50,8 @@ export function Hero() {
       <div className="relative z-10 flex flex-col justify-center">
         <span className="label-caps">SS26 · The first drop</span>
         <h1 className="mt-2.5 font-display text-[40px] font-semibold leading-[0.98] tracking-tight text-ink-900 md:text-[64px]">
-          Our latest <br className="hidden md:block" />
-          offerings.
+          Reload your <br className="hidden md:block" />
+          <span className="italic">fashion.</span>
         </h1>
         <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
           Considered cuts in honest fabrics. Made for daily wear, priced without

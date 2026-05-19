@@ -2,9 +2,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { ProductCard, type ProductCardData } from '@/components/product/product-card';
+import { Marquee } from '@/components/marquee';
 import { publicApi } from '@/lib/api';
 import { env } from '@/lib/env';
 import { Hero } from './hero';
+
+// Editorial marquee — purely decorative, sits between sections like a brand
+// signature. Slow-moving so it reads as a calm rhythm rather than motion.
+const BRAND_PHRASES = [
+  'Made in India',
+  'Curated fabrics',
+  'Slow fashion',
+  'Honest pricing',
+  'Drop 01',
+];
 
 interface PublicListResponse {
   items: ProductCardData[];
@@ -78,13 +89,28 @@ export default async function HomePage() {
         </section>
       ) : null}
 
+      {/* Editorial marquee — brand signature between sections. Slow scroll,
+          full-bleed top and bottom hairline. Decorative only — no announce,
+          so screen readers skip it (the phrases also appear in the trust strip
+          + footer copy where AT can read them statically). */}
+      <Marquee
+        items={BRAND_PHRASES.map((p) => (
+          <span className="font-display italic">{p}</span>
+        ))}
+        speed={48}
+        className="my-6 border-y border-ink-100 py-4 text-[18px] text-ink-700 md:my-10 md:py-5 md:text-[22px]"
+      />
+
       {/* New in rail */}
       {featured.length > 0 ? (
         <section className="px-5 pb-12 md:px-8 md:pb-16">
           <div className="mb-4 flex items-end justify-between">
-            <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
-              New in
-            </h2>
+            <div className="flex items-baseline gap-3">
+              <span className="label-caps">Drop 01</span>
+              <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
+                New in
+              </h2>
+            </div>
             <Link
               href="/shop?sort=new"
               className="text-[13px] text-ink-700 hover:text-ink-900"

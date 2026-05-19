@@ -13,9 +13,22 @@ import { BottomNav } from './bottom-nav';
 import { Footer } from './footer';
 import { Header } from './header';
 import { FirstVisitPincodePrompt, PincodeModal } from '@/components/pincode/pincode-modal';
+import { Marquee } from '@/components/marquee';
 import { CartProvider } from '@/lib/cart-context';
 import { CustomerProvider } from '@/lib/customer-context';
 import { PincodeProvider } from '@/lib/pincode-context';
+
+// Top announcement strip. Persistent across every non-checkout route. Copy is
+// short and rotates by virtue of the loop, not by JS. Edit in one place when
+// you want to swap a promo. Each line should make sense in isolation since
+// the marquee position when a user lands is essentially random.
+const ANNOUNCEMENTS = [
+  'Free shipping on orders over ₹1,499',
+  '14-day returns, no questions asked',
+  'Order by 4pm for same-day dispatch',
+  'Hand-finished in Bengaluru',
+  'WhatsApp us for sizing help',
+];
 
 interface StoreShellProps {
   children: React.ReactNode;
@@ -60,6 +73,17 @@ function Inner({
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Top announcement strip — thin black bar with scrolling promo copy.
+          Kept above the header so it's the first thing on the page. announce
+          true so screen readers hear the actual promo text (e.g. free
+          shipping threshold) instead of the bar being silent. */}
+      <Marquee
+        items={ANNOUNCEMENTS}
+        speed={32}
+        announce
+        pauseOnHover={false}
+        className="bg-ink-900 py-2 font-mono text-[10.5px] uppercase tracking-caps text-snow/85"
+      />
       <Header navCategories={navCategories} onChangePincode={() => setPincodeOpen(true)} />
       <main className="flex-1 pb-20 md:pb-0">{children}</main>
       <Footer />
