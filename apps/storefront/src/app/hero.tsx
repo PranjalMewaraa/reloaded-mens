@@ -10,12 +10,12 @@ import { Button } from '@/components/ui/button';
 // style.transform writes instead of React state so we don't re-render on every
 // scroll event. Reduces-motion users get the static composition.
 //
-// Image URLs are hardcoded placeholders for now — swap to real brand photos
-// when they exist. Both must be present in next.config.ts → remotePatterns.
-const HERO_IMAGE_1 =
-  'https://picsum.photos/seed/reloaded-hero-1/700/900';
-const HERO_IMAGE_2 =
-  'https://picsum.photos/seed/reloaded-hero-2/700/900';
+// Hero images are static assets in `apps/storefront/public/hero/`. Next serves
+// `/public/*` at the site root, so referencing them by absolute path works
+// without remotePatterns config. Swap the files in-place to update the hero —
+// keep the same filenames so no code change is needed.
+const HERO_IMAGE_1 = '/hero/hero-1.jpeg';
+const HERO_IMAGE_2 = '/hero/hero-2.jpeg';
 
 export function Hero() {
   const card1Ref = React.useRef<HTMLDivElement>(null);
@@ -88,7 +88,7 @@ export function Hero() {
             alt=""
             fill
             sizes="(min-width: 768px) 28vw, 50vw"
-            className="object-cover grayscale"
+            className="object-cover"
             priority
           />
         </div>
@@ -103,7 +103,7 @@ export function Hero() {
             alt=""
             fill
             sizes="(min-width: 768px) 28vw, 50vw"
-            className="object-cover grayscale"
+            className="object-cover"
             priority
           />
         </div>
