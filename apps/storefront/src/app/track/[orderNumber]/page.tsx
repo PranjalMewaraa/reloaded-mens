@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import type { TrackingOrder } from '@repo/types';
 import { Pill } from '@/components/ui/pill';
 import { publicApi } from '@/lib/api';
+import { getCustomerOrder } from '@/lib/customer-server';
 import { TrackingView } from './tracking-view';
 
 export const metadata = { title: 'Track your order' };
@@ -16,8 +17,22 @@ interface PageProps {
 export default async function TrackingPage({ params, searchParams }: PageProps) {
   const { orderNumber } = await params;
   const sp = (await searchParams) ?? {};
-  const token = sp.t ?? '';
-  if (!token) notFound();
+  let token = sp.t ?? '';
+
+  // No token in the URL — try the logged-in customer's own copy of the
+  // order. customer-orders/:orderNumber is scoped to the auth cookie, so it
+  // only returns the row if THIS customer actually placed THIS order. The
+  // trackingToken comes off that row and we fall through to the normal
+  // public-tracking fetch as if the customer had landed here from the
+  // confirmation email link.
+  if (!token) {
+    const sessionOrder = await getCustomerOrder(orderNumber);
+    if (sessionOrder?.trackingToken) {
+      token = sessionOrder.trackingToken;
+    } else {
+      notFound();
+    }
+  }
 
   const res = await publicApi<TrackingOrder>(
     `/public/tracking/${encodeURIComponent(orderNumber)}?t=${encodeURIComponent(token)}`,
