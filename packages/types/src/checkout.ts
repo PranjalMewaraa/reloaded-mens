@@ -55,12 +55,17 @@ export const createOrderRequestSchema = z.object({
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 
 export const paymentSessionSchema = z.object({
-  provider: z.enum([PAYMENT_PROVIDER.MOCK, PAYMENT_PROVIDER.PHONEPE]),
+  provider: z.enum([PAYMENT_PROVIDER.MOCK, PAYMENT_PROVIDER.RAZORPAY, PAYMENT_PROVIDER.PHONEPE]),
   sessionId: z.string(),
-  // Relative path the storefront should redirect the customer to. The mock returns
-  // /checkout/processing?session=...; PhonePe (Sprint 10) returns its hosted page URL.
+  // Relative path or absolute URL the storefront uses to advance the
+  // customer to payment. Mock returns /checkout/processing?session=...;
+  // Razorpay returns /checkout/processing (the storefront opens the
+  // Razorpay Checkout modal itself using checkoutPayload).
   redirectUrl: z.string(),
   amountPaisa: z.number().int().nonnegative(),
+  // Razorpay-only — opaque payload the storefront feeds straight into the
+  // Razorpay JS Checkout modal (key_id + order_id + name + prefill).
+  checkoutPayload: z.record(z.unknown()).optional(),
 });
 export type PaymentSession = z.infer<typeof paymentSessionSchema>;
 

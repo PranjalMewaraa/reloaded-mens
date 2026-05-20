@@ -194,10 +194,14 @@ export const AUTH_STAGE = {
 } as const;
 export type AuthStage = (typeof AUTH_STAGE)[keyof typeof AUTH_STAGE];
 
-// Sprint 4 — picks which provider implementation handles createSession + verifyWebhook.
-// 'mock' auto-succeeds in dev; 'phonepe' is the Sprint 10 real integration (stub today).
+// Picks which provider implementation handles createSession + verifyWebhook.
+// 'mock' auto-succeeds in dev; 'razorpay' is the Sprint 10 real integration
+// (stub today, real implementation lands once test creds are in place).
+// 'phonepe' kept as a slot — not the planned default but the interface
+// stays open.
 export const PAYMENT_PROVIDER = {
   MOCK: 'mock',
+  RAZORPAY: 'razorpay',
   PHONEPE: 'phonepe',
 } as const;
 export type PaymentProvider = (typeof PAYMENT_PROVIDER)[keyof typeof PAYMENT_PROVIDER];

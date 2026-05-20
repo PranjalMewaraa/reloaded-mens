@@ -288,6 +288,12 @@ model Order {
   shippingPaisa           Int       @default(0)
   taxPaisa                Int       @default(0)
   totalPaisa              Int
+  // Sprint 10 (Razorpay Route) — partner's share in paisa, stamped at order
+  // creation from the current `partner.split_percent` setting × subtotalPaisa.
+  // Frozen on the row so refund / reverse-transfer math stays deterministic
+  // even if the split percent is changed later. 0 for orders placed before
+  // Route went live.
+  partnerSharePaisa       Int       @default(0)
   appliedCouponCode       String?
   // Denormalised snapshots so live profile edits don't rewrite history.
   contactSnapshot         Json // { name, phone, email }
