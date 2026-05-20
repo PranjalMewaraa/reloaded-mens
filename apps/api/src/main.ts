@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
@@ -39,6 +40,33 @@ async function bootstrap() {
   // The global prefix only applies to controllers — ServeStatic is mounted at /files
   // outside this prefix (see AppModule).
   app.setGlobalPrefix('api/v1', { exclude: ['files/(.*)'] });
+
+  // OpenAPI / Swagger UI — exposed at /api-docs in non-production by default.
+  // Auto-discovered from Nest's controller + DTO metadata; we don't have
+  // @ApiTags / @ApiProperty annotations everywhere yet, so the UI is rough
+  // (controllers + routes show up, request/response shapes are inferred
+  // from Zod schemas at runtime, not OpenAPI metadata at build time).
+  // Still useful as a route inventory + smoke-test surface. Gate behind
+  // `ENABLE_SWAGGER=true` in production if you want it there.
+  const enableSwagger =
+    (config.get<string>('ENABLE_SWAGGER') ?? '').toLowerCase() === 'true' ||
+    (config.get<string>('NODE_ENV') ?? 'development') !== 'production';
+  if (enableSwagger) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Reloaded Menswear API')
+      .setDescription(
+        'Internal REST API for the storefront + admin. Mounted under /api/v1. ' +
+          'Cookie-based auth (access_token for admin, customer_access for storefront).',
+      )
+      .setVersion('0.1.0')
+      .addCookieAuth('access_token', { type: 'apiKey', in: 'cookie' })
+      .addCookieAuth('customer_access', { type: 'apiKey', in: 'cookie' })
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api-docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   const port = config.get<number>('API_PORT') ?? 4000;
   const host = config.get<string>('API_HOST') ?? '0.0.0.0';
