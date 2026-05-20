@@ -195,7 +195,11 @@ function StaffFormDialog({ staff, onClose }: { staff?: AdminStaff; onClose: () =
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      {/* max-h + overflow-y-auto so the dialog scrolls internally on shorter
+          viewports (e.g. laptops) instead of clipping the top of the form.
+          The header stays at the top of the scrollable area; the footer is
+          a sibling so it stays sticky at the bottom. */}
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${staff!.name}` : 'Add staff'}</DialogTitle>
           <DialogDescription>
@@ -205,7 +209,7 @@ function StaffFormDialog({ staff, onClose }: { staff?: AdminStaff; onClose: () =
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="-mx-6 flex-1 space-y-4 overflow-y-auto px-6">
           <div className="space-y-1">
             <Label htmlFor="staff-name">Name</Label>
             <Input
