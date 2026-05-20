@@ -24,6 +24,7 @@ import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
 import { CustomerOrdersModule } from './customer-orders/customer-orders.module.js';
 import { LeadsModule } from './leads/leads.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
+import { AdminStaffModule } from './admin-staff/admin-staff.module.js';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ ConfigModule.forRoot({
     CustomerOrdersModule,
     LeadsModule,
     ReviewsModule,
+    AdminStaffModule,
   ],
   controllers: [HealthController],
 })

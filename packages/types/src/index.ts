@@ -11,3 +11,4 @@ export * from './promotions.js';
 export * from './customer-auth.js';
 export * from './leads.js';
 export * from './reviews.js';
+export * from './admin-staff.js';

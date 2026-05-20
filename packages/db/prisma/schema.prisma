@@ -26,6 +26,12 @@ model AdminUser {
   passwordHash  String
   name          String
   role          String // 'admin' | 'staff'
+  // Module slugs the user can access. Only checked when role='staff' — admins
+  // bypass module gating. Values come from STAFF_MODULE in @repo/types.
+  // Empty array (default) means the staff user can't access anything until
+  // an admin grants modules. Stored as Json so the array stays portable
+  // across Prisma engines without a separate join table.
+  permissions   Json      @default("[]")
   totpSecret    String?
   totpEnabledAt DateTime?
   lastLoginAt   DateTime?
