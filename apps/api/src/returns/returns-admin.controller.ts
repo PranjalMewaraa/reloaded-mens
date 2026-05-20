@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_ROLE,
+  STAFF_MODULE,
   adminReturnListQuerySchema,
   approveReturnSchema,
   cancelReturnRequestSchema,
@@ -27,15 +28,18 @@ import {
   type VerifyReturnPayload,
 } from '@repo/types';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard.js';
+import { ModuleGuard } from '../auth/guards/module.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { RequireModule } from '../auth/decorators/require-module.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { User, type AuthedUser } from '../auth/decorators/user.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { ReturnsService } from './returns.service.js';
 
 @Controller('admin-returns')
-@UseGuards(JwtAccessGuard, RolesGuard)
+@UseGuards(JwtAccessGuard, RolesGuard, ModuleGuard)
 @Roles(ADMIN_ROLE.ADMIN, ADMIN_ROLE.STAFF)
+@RequireModule(STAFF_MODULE.RETURNS)
 export class ReturnsAdminController {
   constructor(private readonly returns: ReturnsService) {}
 

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_ROLE,
+  STAFF_MODULE,
   adminLeadListQuerySchema,
   updateLeadSchema,
   type AdminLeadListQuery,
@@ -18,7 +19,9 @@ import {
 } from '@repo/types';
 import type { Request } from 'express';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard.js';
+import { ModuleGuard } from '../auth/guards/module.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { RequireModule } from '../auth/decorators/require-module.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { User, type AuthedUser } from '../auth/decorators/user.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
@@ -34,8 +37,9 @@ function reqContext(req: Request, user: AuthedUser) {
 }
 
 @Controller('admin-leads')
-@UseGuards(JwtAccessGuard, RolesGuard)
+@UseGuards(JwtAccessGuard, RolesGuard, ModuleGuard)
 @Roles(ADMIN_ROLE.ADMIN, ADMIN_ROLE.STAFF)
+@RequireModule(STAFF_MODULE.LEADS)
 export class LeadsAdminController {
   constructor(private readonly leads: LeadsService) {}
 

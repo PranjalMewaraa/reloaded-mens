@@ -13,6 +13,7 @@ import {
 import {
   ACTOR,
   ADMIN_ROLE,
+  STAFF_MODULE,
   createVariantSchema,
   inventoryListQuerySchema,
   matrixCreateSchema,
@@ -25,7 +26,9 @@ import {
   type UpdateVariantInput,
 } from '@repo/types';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard.js';
+import { ModuleGuard } from '../auth/guards/module.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { RequireModule } from '../auth/decorators/require-module.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { User, type AuthedUser } from '../auth/decorators/user.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
@@ -34,8 +37,9 @@ import { VariantsService } from './variants.service.js';
 // Variants live under /products/:productId/variants for create/list (their natural parent)
 // and under /variants/:id for everything that needs a stable URL.
 @Controller()
-@UseGuards(JwtAccessGuard, RolesGuard)
+@UseGuards(JwtAccessGuard, RolesGuard, ModuleGuard)
 @Roles(ADMIN_ROLE.ADMIN, ADMIN_ROLE.STAFF)
+@RequireModule(STAFF_MODULE.INVENTORY)
 export class VariantsController {
   constructor(private readonly variants: VariantsService) {}
 

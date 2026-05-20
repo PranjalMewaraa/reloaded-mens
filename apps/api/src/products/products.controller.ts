@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ADMIN_ROLE,
+  STAFF_MODULE,
   createProductSchema,
   productListQuerySchema,
   setProductCategoriesSchema,
@@ -23,14 +24,17 @@ import {
   type UpdateProductInput,
 } from '@repo/types';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard.js';
+import { ModuleGuard } from '../auth/guards/module.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { RequireModule } from '../auth/decorators/require-module.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { ProductsService } from './products.service.js';
 
 @Controller('products')
-@UseGuards(JwtAccessGuard, RolesGuard)
+@UseGuards(JwtAccessGuard, RolesGuard, ModuleGuard)
 @Roles(ADMIN_ROLE.ADMIN, ADMIN_ROLE.STAFF)
+@RequireModule(STAFF_MODULE.PRODUCTS)
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 

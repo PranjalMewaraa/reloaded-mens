@@ -29,6 +29,16 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
     if (payload.type !== 'access') throw new UnauthorizedException();
     const user = await prisma.adminUser.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) throw new UnauthorizedException();
-    return { id: user.id, email: user.email, name: user.name, role: user.role };
+    // permissions ride on req.user so ModuleGuard doesn't need a second DB
+    // hit per request. Stored as Json in the DB; cast to string[] here —
+    // ModuleGuard further validates against STAFF_MODULES in @repo/types.
+    const permissions = Array.isArray(user.permissions) ? (user.permissions as string[]) : [];
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      permissions,
+    };
   }
 }

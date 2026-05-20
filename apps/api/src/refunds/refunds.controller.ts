@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ADMIN_ROLE,
+  STAFF_MODULE,
   createRefundRequestSchema,
   refundListQuerySchema,
   rejectRefundSchema,
@@ -9,14 +10,17 @@ import {
   type RejectRefundRequest,
 } from '@repo/types';
 import { JwtAccessGuard } from '../auth/guards/jwt-access.guard.js';
+import { ModuleGuard } from '../auth/guards/module.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { RequireModule } from '../auth/decorators/require-module.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { User, type AuthedUser } from '../auth/decorators/user.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { RefundsService } from './refunds.service.js';
 
 @Controller('refunds')
-@UseGuards(JwtAccessGuard, RolesGuard)
+@UseGuards(JwtAccessGuard, RolesGuard, ModuleGuard)
+@RequireModule(STAFF_MODULE.REFUNDS)
 export class RefundsController {
   constructor(private readonly refunds: RefundsService) {}
 
