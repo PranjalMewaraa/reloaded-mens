@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, prisma } from '@repo/db';
@@ -41,6 +42,10 @@ import { SHIPPING_PROVIDER_TOKEN, type ShippingProviderImpl } from '../shipping/
 
 @Injectable()
 export class AdminOrdersService {
+  // Module-scoped logger — Nest formats output as "[AdminOrders] LEVEL …"
+  // so it's easy to filter in `docker compose logs api | grep AdminOrders`.
+  private readonly logger = new Logger('AdminOrders');
+
   constructor(
     private readonly audit: AuditService,
     private readonly reviews: ReviewsService,
@@ -160,11 +165,25 @@ export class AdminOrdersService {
       // AWB in or let the integration assign it.
       let trackingNumber = body.trackingNumber ?? null;
       if (target === ORDER_STATE.SHIPPED && !trackingNumber) {
-        const awb = await this.shipping.assignAwb({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-        });
-        trackingNumber = awb.trackingNumber;
+        try {
+          const awb = await this.shipping.assignAwb({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+          });
+          trackingNumber = awb.trackingNumber;
+        } catch (err) {
+          // Shipping provider call failed (mock won't, but real Shiprocket
+          // can on rate-limit / API downtime). Surface in logs and re-throw
+          // so the admin sees the failure instead of silently proceeding
+          // to "shipped" without a tracking number.
+          this.logger.error(
+            `assignAwb failed for ${order.orderNumber} on transition to shipped`,
+            err instanceof Error ? err.stack : String(err),
+          );
+          throw new BadRequestException(
+            'Could not assign a tracking number from the carrier. Try again or enter one manually.',
+          );
+        }
       }
 
       const timestampField = transitionTimestampField(target);
@@ -215,6 +234,16 @@ export class AdminOrdersService {
         resource: `order:${order.orderNumber}`,
         payload: { from: order.state, to: target, trackingNumber },
       });
+
+      // Successful transition — log the actor + transition so we can grep
+      // the lifecycle of any order out of `docker compose logs api`. Audit
+      // log captures the same plus IP / UA, but the api log is closer to
+      // the actual request and easier to live-tail.
+      this.logger.log(
+        `transition ${order.orderNumber} ${order.state} → ${target} actor=${actor.id}${
+          trackingNumber ? ` awb=${trackingNumber}` : ''
+        }`,
+      );
 
       return shapeAdminDetail(updated);
     });
@@ -301,6 +330,10 @@ export class AdminOrdersService {
         payload: { reason: body.reason, restocked: body.restock },
       });
 
+      this.logger.log(
+        `cancel ${order.orderNumber} actor=${actor.id} role=${actor.role} restocked=${body.restock} reason="${body.reason}"`,
+      );
+
       return shapeAdminDetail(updated);
     });
   }
@@ -363,14 +396,24 @@ export class AdminOrdersService {
     });
     if (!order) throw new NotFoundException(`Order ${idOrNumber} not found`);
     const snapshot = await this.getDetail(order.id);
-    return this.shipping.renderLabelHtml({
-      order: {
-        ...snapshot,
-        trackingToken: order.trackingToken,
-        // OrderSnapshot expects items as the snapshot shape — the detail's items are
-        // already in that form so this passes through.
-      } as unknown as Parameters<ShippingProviderImpl['renderLabelHtml']>[0]['order'],
-    });
+    try {
+      const html = await this.shipping.renderLabelHtml({
+        order: {
+          ...snapshot,
+          trackingToken: order.trackingToken,
+          // OrderSnapshot expects items as the snapshot shape — the detail's items are
+          // already in that form so this passes through.
+        } as unknown as Parameters<ShippingProviderImpl['renderLabelHtml']>[0]['order'],
+      });
+      this.logger.log(`label rendered ${order.orderNumber}`);
+      return html;
+    } catch (err) {
+      this.logger.error(
+        `renderLabelHtml failed for ${order.orderNumber}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      throw err;
+    }
   }
 
   // -------- Internal helper for refunds module --------

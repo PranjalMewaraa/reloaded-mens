@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
+import { ExceptionsLoggerFilter } from './common/filters/exceptions-logger.filter.js';
 import { HealthController } from './health/health.controller.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -90,6 +91,12 @@ ThrottlerModule.forRoot([
     // "default" tier. Specific routes opt into the "strict" tier via
     // @Throttle({ strict: { ... } }) — see e.g. AuthController.login.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Global exception filter — logs every caught exception with HTTP
+    // context (method, url, status, ip, user) before delegating to
+    // Nest's default response handler. Order, payment, and refund
+    // failures show up in the api logs with enough context to debug
+    // from the log line alone.
+    { provide: APP_FILTER, useClass: ExceptionsLoggerFilter },
   ],
 })
 export class AppModule {}

@@ -322,15 +322,38 @@ export class PublicCheckoutService {
       return { order: orderWithToken, orderNumber };
     });
 
+    // Order written + stock decremented + counters bumped. Log once with the
+    // identifiers an ops person would need to grep for downstream events
+    // (payment webhook, transition, etc.). Phone is masked to the last
+    // four digits — enough to disambiguate in logs without persisting full
+    // PII to wherever container stdout ends up.
+    this.logger.log(
+      `order created ${orderNumber} total=${order.totalPaisa} discount=${discountPaisa}` +
+        ` coupon=${appliedCouponCode ?? '-'} phone=…${body.contact.phone.slice(-4)}`,
+    );
+
     // 8. Create the payment session — outside the tx because some providers issue
     // network calls. The mock provider is synchronous but the interface contract is async.
-    const session = await this.payments.createSession({
-      orderId: order.id,
-      orderNumber,
-      amountPaisa: order.totalPaisa,
-      successRedirectUrl: `/checkout/success/${orderNumber}`,
-      customerPhone: body.contact.phone,
-    });
+    let session;
+    try {
+      session = await this.payments.createSession({
+        orderId: order.id,
+        orderNumber,
+        amountPaisa: order.totalPaisa,
+        successRedirectUrl: `/checkout/success/${orderNumber}`,
+        customerPhone: body.contact.phone,
+      });
+    } catch (err) {
+      // Payment provider failed AFTER the order row was written. The order
+      // sits in payment_pending with no payment session — customer can
+      // retry via the same idempotencyKey, which short-circuits to the
+      // existing order and creates a fresh session.
+      this.logger.error(
+        `payment session creation failed for ${orderNumber}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      throw err;
+    }
 
     await prisma.payment.create({
       data: {
@@ -463,6 +486,20 @@ export class PublicCheckoutService {
           },
         });
       });
+    }
+
+    // Always log the outcome — captured + failed are both audit-worthy.
+    // payment.orderId resolves to a `${order.orderNumber}` via the include
+    // above. The `provider=` field is forward-prep for Sprint 10 when both
+    // mock + phonepe paths coexist.
+    if (parsed.status === 'captured') {
+      this.logger.log(
+        `payment captured ${payment.order.orderNumber} provider=${payment.provider} amount=${payment.amountPaisa}`,
+      );
+    } else {
+      this.logger.warn(
+        `payment failed ${payment.order.orderNumber} provider=${payment.provider} session=${parsed.sessionId}`,
+      );
     }
 
     // Send the confirmation email outside the tx so a flaky transport doesn't roll back
