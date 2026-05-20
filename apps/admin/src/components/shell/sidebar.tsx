@@ -8,6 +8,7 @@ import {
   Package,
   PackageOpen,
   Percent,
+  Shield,
   ShoppingBag,
   Star,
   Tags,
@@ -53,6 +54,10 @@ const SECTIONS: NavSection[] = [
       { label: 'Reviews', href: '/reviews', icon: Star, enabled: true },
       { label: 'Promotions', href: '/promotions', icon: Percent, enabled: true },
     ],
+  },
+  {
+    label: 'Settings',
+    items: [{ label: 'Staff', href: '/staff', icon: Shield, enabled: true }],
   },
 ];
 

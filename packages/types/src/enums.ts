@@ -7,6 +7,28 @@ export const ADMIN_ROLE = {
 } as const;
 export type AdminRole = (typeof ADMIN_ROLE)[keyof typeof ADMIN_ROLE];
 
+// Module slugs that an admin can grant individually to a staff user. Mirror
+// the AdminUser.permissions Json column in Prisma. Adding a new module here:
+//   1. add the slug below
+//   2. (later) add the corresponding @RequireModule guard to the controller
+//   3. surface the toggle in the admin staff form (it reads STAFF_MODULES)
+export const STAFF_MODULE = {
+  ORDERS: 'orders',
+  RETURNS: 'returns',
+  REFUNDS: 'refunds',
+  INVENTORY: 'inventory',
+  PRODUCTS: 'products',
+  CATEGORIES: 'categories',
+  PROMOTIONS: 'promotions',
+  LEADS: 'leads',
+  REVIEWS: 'reviews',
+  CUSTOMERS: 'customers',
+} as const;
+export type StaffModule = (typeof STAFF_MODULE)[keyof typeof STAFF_MODULE];
+
+// Iterable list for the admin UI / validators.
+export const STAFF_MODULES: StaffModule[] = Object.values(STAFF_MODULE);
+
 export const ORDER_STATE = {
   PLACED: 'placed',
   CONFIRMED: 'confirmed',
