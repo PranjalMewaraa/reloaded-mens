@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   requestCustomerOtpSchema,
   updateCustomerProfileSchema,
@@ -34,6 +35,10 @@ function reqContext(req: Request) {
 export class CustomerAuthController {
   constructor(private readonly auth: CustomerAuthService) {}
 
+  // Strict throttle on OTP — 5 requests per IP per minute. Backstops the
+  // existing per-phone 60s in-process cooldown in CustomerAuthService against
+  // the "rotate phone numbers from one IP to spam OTPs" case.
+  @Throttle({ strict: { limit: 5, ttl: 60_000 } })
   @Post('otp/request')
   @HttpCode(200)
   async requestOtp(
@@ -43,6 +48,9 @@ export class CustomerAuthController {
     return this.auth.requestOtp(body.phone, reqContext(req));
   }
 
+  // Strict throttle on verify too — limits brute-force on the 6-digit code
+  // beyond the per-OTP 5-attempt counter already baked into the service.
+  @Throttle({ strict: { limit: 10, ttl: 60_000 } })
   @Post('otp/verify')
   @HttpCode(200)
   async verifyOtp(

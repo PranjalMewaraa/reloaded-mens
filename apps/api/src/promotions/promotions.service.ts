@@ -336,12 +336,33 @@ export class PromotionsService {
 
     // First-time customer check — only run when phone is supplied. Otherwise
     // the engine treats it as null (fail open at the cart, fail closed at order).
+    //
+    // Only count "paid-or-better" states so a customer whose first checkout was
+    // cancelled / payment_failed isn't unfairly bumped out of first-order
+    // promos when they retry. payment_pending also excluded — until payment
+    // captures, the order shouldn't count.
     let isFirstTimeCustomer: boolean | null = null;
     if (input.phone) {
       const existingCount = await prisma.order.count({
-        where: { contactSnapshot: { path: ['phone'], equals: input.phone } },
+        where: {
+          contactSnapshot: { path: ['phone'], equals: input.phone },
+          state: { in: ['confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'] },
+        },
       });
       isFirstTimeCustomer = existingCount === 0;
+    }
+
+    // Resolve customerId from phone for the per-customer cap check inside
+    // lookupCoupon. cart-evaluate is an unauthenticated endpoint, so we infer
+    // the customer rather than reading from a session — keeps the cap check
+    // consistent with commitForOrder, which uses customerId OR phone.
+    let customerId: string | null = null;
+    if (input.phone) {
+      const customer = await prisma.customer.findUnique({
+        where: { phone: input.phone },
+        select: { id: true },
+      });
+      customerId = customer?.id ?? null;
     }
 
     const automaticPromotions = await this.findActiveAutomaticPromotions();
@@ -351,7 +372,10 @@ export class PromotionsService {
     let couponMessage: string | null = null;
     let redeemedCouponCode: string | null = null;
     if (input.couponCode) {
-      const lookup = await this.lookupCoupon(input.couponCode, { phone: input.phone });
+      const lookup = await this.lookupCoupon(input.couponCode, {
+        phone: input.phone,
+        customerId,
+      });
       couponStatus = lookup.status;
       couponMessage = lookup.message;
       if (lookup.status === COUPON_STATUS.APPLIED && lookup.promotionRule) {
@@ -428,8 +452,12 @@ export class PromotionsService {
     let couponId: string | null = null;
 
     if (args.couponCode) {
+      // Normalise to match lookupCoupon — storage is uppercase, callers may
+      // not be. Identical handling at both points avoids the case where
+      // cart-evaluate accepted a code and commit silently 404s on it.
+      const normalisedCode = args.couponCode.trim().toUpperCase();
       const coupon = await tx.coupon.findUnique({
-        where: { code: args.couponCode },
+        where: { code: normalisedCode },
         include: { promotion: true },
       });
       if (!coupon || !coupon.isActive || !coupon.promotion.isActive) {
@@ -495,10 +523,18 @@ export class PromotionsService {
 
   private async lookupCoupon(
     code: string,
-    ctx: { phone?: string },
+    ctx: { phone?: string; customerId?: string | null },
   ): Promise<{ status: CouponStatus; message: string | null; promotionRule: PromotionRule | null }> {
+    // Normalise the user-supplied code BEFORE lookup. Schema stores codes
+    // uppercase (see Coupon.code comment), and while the storefront also
+    // uppercases on input, direct api callers (curl, third-party clients)
+    // don't — and lowercase silently 404s without this. Defense-in-depth.
+    const normalisedCode = code.trim().toUpperCase();
+    if (normalisedCode.length === 0) {
+      return { status: COUPON_STATUS.INVALID, message: 'Enter a coupon code.', promotionRule: null };
+    }
     const coupon = await prisma.coupon.findUnique({
-      where: { code },
+      where: { code: normalisedCode },
       include: { promotion: true },
     });
     if (!coupon) {
@@ -524,9 +560,16 @@ export class PromotionsService {
     if (coupon.usageLimitTotal > 0 && coupon.usageCount >= coupon.usageLimitTotal) {
       return { status: COUPON_STATUS.LIMIT_REACHED, message: 'This code has reached its usage limit.', promotionRule: null };
     }
-    if (coupon.usageLimitPerCustomer > 0 && ctx.phone) {
+    // Per-customer cap: match the OR-style identity check that commitForOrder
+    // uses (customerId OR phone). Without this, cart-evaluate could greenlight
+    // a coupon that order-placement then rejects because the customerId match
+    // adds another usage row the phone-only count didn't see.
+    if (coupon.usageLimitPerCustomer > 0 && (ctx.phone || ctx.customerId)) {
+      const identityClauses: Array<{ customerId?: string; phone?: string }> = [];
+      if (ctx.customerId) identityClauses.push({ customerId: ctx.customerId });
+      if (ctx.phone) identityClauses.push({ phone: ctx.phone });
       const used = await prisma.couponUsage.count({
-        where: { couponId: coupon.id, phone: ctx.phone },
+        where: { couponId: coupon.id, OR: identityClauses },
       });
       if (used >= coupon.usageLimitPerCustomer) {
         return {
@@ -539,7 +582,7 @@ export class PromotionsService {
     return {
       status: COUPON_STATUS.APPLIED,
       message: null,
-      promotionRule: parsePromotionRule(coupon.promotion, code),
+      promotionRule: parsePromotionRule(coupon.promotion, normalisedCode),
     };
   }
 

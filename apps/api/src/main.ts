@@ -12,6 +12,13 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
 
+  // Trust the X-Forwarded-For chain from Cloudflare → Caddy → api so that
+  // req.ip resolves to the real visitor IP, not the docker network gateway.
+  // ThrottlerGuard's per-IP limits depend on this being correct, otherwise
+  // every request would look like the same internal IP and one user could
+  // exhaust the bucket for everyone.
+  app.set('trust proxy', 1);
+
   const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? '')
     .split(',')
     .map((s) => s.trim())

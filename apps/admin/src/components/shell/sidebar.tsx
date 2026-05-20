@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BarChart3,
   Box,
   Home,
   Package,
@@ -37,6 +38,7 @@ const SECTIONS: NavSection[] = [
       { label: 'Orders', href: '/orders', icon: ShoppingBag, enabled: true },
       { label: 'Returns', href: '/orders/returns', icon: PackageOpen, enabled: true },
       { label: 'Inventory', href: '/inventory', icon: Package, enabled: true },
+      { label: 'Reports', href: '/reports', icon: BarChart3, enabled: true },
     ],
   },
   {

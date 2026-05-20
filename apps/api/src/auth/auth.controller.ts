@@ -10,6 +10,7 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   AUDIT_EVENT_TYPE,
   AUTH_STAGE,
@@ -55,6 +56,9 @@ export class AuthController {
 
   // POST /auth/login — step 1: email + password.
   // On success: sets stage_token cookie and returns the next stage the client should drive.
+  // Strict throttle — 10 attempts per IP per minute. Brute-force protection
+  // beyond what bcrypt costs already provide.
+  @Throttle({ strict: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   @UsePipes(new ZodValidationPipe(loginRequestSchema))

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { HealthController } from './health/health.controller.js';
 import { AuditModule } from './audit/audit.module.js';
@@ -25,6 +27,7 @@ import { CustomerOrdersModule } from './customer-orders/customer-orders.module.j
 import { LeadsModule } from './leads/leads.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { AdminStaffModule } from './admin-staff/admin-staff.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 
 @Module({
   imports: [
@@ -35,6 +38,15 @@ ConfigModule.forRoot({
   envFilePath: process.env.NODE_ENV === 'production' ? [] : ['../../.env', '.env'],
   ignoreEnvFile: process.env.NODE_ENV === 'production',
 }),
+
+// Two named throttler tiers — the global default is generous so it doesn't
+// trip up legitimate browsing, and a `strict` tier is opted into via
+// @Throttle({ strict: ... }) on auth + OTP + coupon validation routes
+// where abuse cost is high. Names must match the keys used in @Throttle.
+ThrottlerModule.forRoot([
+  { name: 'default', ttl: 60_000, limit: 120 }, // 120 req/min/IP — comfortable browsing
+  { name: 'strict', ttl: 60_000, limit: 10 },   // 10 req/min/IP — auth, OTP, coupon checks
+]),
     // Public file serving for LocalStorageProvider. Mounted at /files (outside the
     // /api/v1 global prefix — see main.ts setGlobalPrefix exclude).
     //
@@ -70,8 +82,15 @@ ConfigModule.forRoot({
     LeadsModule,
     ReviewsModule,
     AdminStaffModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
+  providers: [
+    // Apply ThrottlerGuard globally so every controller picks up the
+    // "default" tier. Specific routes opt into the "strict" tier via
+    // @Throttle({ strict: { ... } }) — see e.g. AuthController.login.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
 
