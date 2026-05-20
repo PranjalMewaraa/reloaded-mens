@@ -92,74 +92,93 @@ pre-Phase-2 setup checklist in `implementation_plan.md` §3.2).
 ## Razorpay Route — partner split (updates Sprint 10)
 
 Plan change: instead of PhonePe PG, **Sprint 10 ships Razorpay with the
-Route product enabled**. We have one partner who gets a **5% cut on
-every order**, and the cleanest way to do that without manual
-reconciliation later is to split the payment at capture time via
-Razorpay Route.
+Route product enabled**. The development & maintenance partner takes
+**5% of every order** as their professional fee; Route splits the
+payment automatically at capture so there's no reconciliation cron or
+monthly wire transfer to maintain.
+
+### Locked business decisions (no further open questions before Sprint 10)
+
+These have been settled — committing them to docs so the eventual
+implementation doesn't re-litigate.
+
+| Decision | Locked value | Why |
+|---|---|---|
+| **Business form** | Sole proprietorship | Current setup, will revisit if/when we incorporate to Pvt Ltd |
+| **Revenue bracket** | < ₹1 crore / FY | Below 44AB audit threshold (₹1 cr standard, ₹10 cr for mostly-digital — we're firmly under both) |
+| **GST status** | Registered | Mandatory for ecommerce sellers regardless of turnover; doesn't change the TDS analysis |
+| **Partner classification** | B2B service vendor (dev + maintenance) | Not a marketplace co-seller, not a referral affiliate — he provides platform development & maintenance services |
+| **Split base** | **5% of order subtotal** (goods total, pre-shipping, pre-tax) | Excludes tax (passthrough) and shipping (passthrough to carrier); keeps refund math clean |
+| **TDS deduction** | **None** | Section 194J only applies to individuals/proprietors if 44AB audit applied to the previous FY. We're under the threshold, so deduction is not required by law. Will revisit if we incorporate or cross ₹1 cr |
+| **GST on partner's invoice** | None (he's under the ₹20L registration threshold) | Reloaded loses input credit on the 5%, but the simplicity wins. Will revisit if his total annual income crosses ₹20L |
+| **Refund split rule** | Proportional reverse-transfer | Partial refunds claw back the partner's share proportionally (`refund_amount × split_percent`). Documented in the partner agreement |
+| **Customer-facing surface** | None | Customer pays Reloaded for menswear; the 5% is an internal operating cost (same as AWS, Razorpay MDR, etc.). Optional public "Built by …" credit in the footer if we want acknowledgment |
+
+### Trigger conditions to revisit any of the above
+
+- We cross **₹1 crore annual turnover** → 44AB audit kicks in; we'll need to deduct TDS u/s 194J (10%) on the partner's fee starting the following FY.
+- We **incorporate** as Pvt Ltd / LLP / OPC → TDS u/s 194J becomes mandatory from rupee one, not turnover-dependent.
+- Partner's **total annual income crosses ₹20 lakhs** → he registers for GST, starts charging us 18% with input credit available on our side.
+- We add a **second partner** with a different split → setting expands from a single percent to a per-partner table.
 
 ### How Route works in our flow
 
 1. Customer pays the full order total (₹3,499) on Razorpay Checkout.
-2. At capture, Razorpay records a `transfers[]` payload — one entry
+2. At capture, Razorpay reads our `transfers[]` payload — one entry
    per recipient (here just the partner). Razorpay holds the funds
    until each linked account's settlement cycle (T+3 working days
    by default).
 3. The 95% lands in our settlement; the 5% lands in the partner's
-   linked account directly. No spreadsheet reconciliation, no
-   monthly bank transfers.
+   linked account directly. No spreadsheet reconciliation.
 
-### Pre-Sprint-10 setup checklist (start now — Razorpay onboarding has its own lead time)
+### Pre-Sprint-10 onboarding checklist (start now — Razorpay onboarding has its own lead time)
 
-- [ ] **Razorpay account** — register, complete KYC (PAN, GSTIN, bank
-      proof, current account verification). Typically 1–3 working days.
-- [ ] **Route activation** — Route is NOT on by default. Once the main
-      account is approved, raise a Route activation request via the
-      Razorpay dashboard. They review your business case and turn it
-      on; usually another 1–2 working days.
-- [ ] **Partner linked account** — your partner either creates their
-      own Razorpay account and gets added as a "linked account" to
-      yours, OR you create a sub-account on their behalf (they sign
-      a Linked Account agreement). Either way they need their own
-      PAN + bank account for KYC.
-- [ ] **Decide the split base.** "5% on every order" is ambiguous —
-      pin one down before coding:
-      - 5% of **gross** total (subtotal + shipping + tax)?
-      - 5% of **subtotal** (goods total, pre-shipping, pre-tax) ←
-        most common for affiliate / referral arrangements
-      - 5% of **net of refunds** (computed at settlement, not capture)
-      This affects the `transfers[].amount` calculation and what
-      happens during refunds.
-- [ ] **GST / TDS implications.** Who is the "seller of record" for
-      the partner's 5% — is it a B2B service fee they invoice us for
-      (and we deduct TDS u/s 194H/194O), or is the partner a vendor
-      we're paying via marketplace flow? Get a CA opinion before
-      Sprint 10 — affects invoice template + monthly returns.
+- [ ] **Razorpay account** — register, KYC (PAN + GSTIN + bank proof
+      + current account verification). Typically 1–3 working days.
+- [ ] **Route activation** — separate request via the Razorpay
+      dashboard once the main account is approved. Another 1–2
+      working days.
+- [ ] **Partner linked account** — his own Razorpay account added as
+      a "linked account" to ours (or we create one for him under our
+      umbrella). He submits his PAN + bank for KYC. Producing
+      `acc_xxx` ID goes into env + Settings.
+- [ ] **One-page Services Agreement** between Reloaded and the
+      partner. Pins the 5% rate, the scope of services (development
+      + maintenance + hosting + support), term, termination, refund-
+      split rule (proportional). Generic template fine.
+- [ ] **Monthly invoice template** for the partner to use — email
+      PDF is enough, no GST line since he's unregistered. Reloaded
+      books these as `Platform development & maintenance services`
+      vendor expense.
 
 ### Technical changes Sprint 10 will need
 
 - **PaymentProvider interface** (currently mocked in Sprint 4) gains
   a `transfers` field on the create-session payload. The MockProvider
-  stays a no-op; the new `RazorpayProvider` implements the split.
+  stays a no-op for dev; the new `RazorpayProvider` implements the
+  split for prod.
 - **Setting table** gets two new rows: `partner.linked_account_id`
-  (Razorpay's `acc_xxx` id) and `partner.split_percent` (e.g. 5.0).
-  No code change to bump the percent later — admin updates the setting.
-- **Refund handling becomes harder.** A full refund needs to clawback
-  the partner's portion via Razorpay's "reverse transfer" API. Partial
-  refunds need a rule: do we proportionally split the refund 95/5,
-  or eat the partner's cut as a cost? Decide before coding.
-- **GST invoice template** — if the partner is a service provider to
-  us, our invoice to the customer is still for the full order amount;
-  the partner's 5% is recorded separately as a B2B vendor invoice
-  (incoming to us). If the partner is a marketplace vendor, the
-  invoicing changes substantially.
-- **Webhook signature verification** — Razorpay uses HMAC-SHA256 with
-  a separate webhook secret. Standard pattern, less footgun than
-  PhonePe's `X-VERIFY` scheme.
+  (Razorpay's `acc_xxx` id) and `partner.split_percent` (default 5.0).
+  No code change to bump the percent later — admin updates the
+  setting.
+- **Order schema** gets a `partnerSharePaisa` column, stamped at
+  order creation from the current setting value. Locked in at the
+  order row so reconciliation is deterministic even if the percent
+  changes later.
+- **Refund handling** — RefundService issues a reverse-transfer
+  (`refund_amount × split_percent / 100`) alongside the customer
+  refund, proportionally for partial refunds.
+- **GST invoice template** to the customer stays unchanged — full
+  order amount, no mention of the partner. The 5% is recorded
+  separately in Reloaded's books from the partner's monthly invoice
+  to us.
+- **Webhook signature verification** — Razorpay uses HMAC-SHA256
+  with a separate webhook secret. Verify in middleware against the
+  raw body before any side effects.
 
 ### What we gain vs the old PhonePe plan
 
-- Better-documented SDK + sandbox (significantly faster integration
-  than PhonePe; expect ~3 days saved on Sprint 10 itself).
+- Better-documented SDK + sandbox (~3 days saved on Sprint 10).
 - Native split-payments via Route — what would otherwise be a
   reconciliation cron job + monthly wire transfer becomes automatic.
 - Razorpay's UPI app intent flow is solid; we don't lose anything

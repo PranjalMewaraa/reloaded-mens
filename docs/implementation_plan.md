@@ -500,15 +500,18 @@ Provider switched from PhonePe to **Razorpay with Route enabled** to support a f
 - **Sandbox testing:** Razorpay's test mode has test UPI VPAs (`success@razorpay`, `failure@razorpay`), test card numbers, simulated webhook events. Significantly more polished than PhonePe's sandbox.
 - **Switch toggle:** `PAYMENT_PROVIDER=mock | razorpay` in env.
 
-**Route (partner split) specifics:**
+**Route (partner split) specifics — locked decisions:**
 
-- Decide ONCE the split base — % of subtotal vs gross — and stamp it on every Order at creation time so re-evaluation is deterministic. Recommendation: 5% of subtotal (pre-shipping, pre-tax) to keep refund math sane and exclude tax-passthrough revenue from the partner's cut.
-- Setting table holds two rows: `partner.linked_account_id` (`acc_xxx`) and `partner.split_percent` (default `5`). Admin can adjust the percent later; the linked account id rarely changes.
-- Refund handling decision tree:
-  - **Full refund**: refund the customer for the full amount AND issue a reverse-transfer for the partner's share back to us.
-  - **Partial refund** (most returns): proportional reverse-transfer (refund_amount × split_percent), so the partner shares the loss proportionally. Document this in the partner agreement.
-- The `transfers[]` payload supports per-transfer `notes` — stamp the order number and `kind: 'partner_share'` there so reconciliation is grep-able from Razorpay's dashboard.
-- **Settlement** is independent per linked account. Our 95% settles to our bank on T+3; the partner's 5% settles to their bank on T+3 (or whatever their account's cycle is).
+The business decisions below are **finalised** (see ROADMAP.md §"Razorpay Route — partner split → Locked business decisions" for the rationale matrix). Sprint 10 codes against these without re-litigating.
+
+- **Business form & scale:** Reloaded is a GST-registered sole proprietorship operating well under ₹1 crore annual turnover. This puts us below the 44AB audit threshold, which means TDS u/s 194J does **not** apply to our payments to the partner. We pay him the full 5% via Route; he files his own ITR including this professional income. Trigger to revisit: incorporation OR turnover crossing ₹1 cr.
+- **Partner classification:** B2B services vendor (platform development & maintenance). Not a referral affiliate, not a marketplace co-seller. He invoices us monthly via email PDF (informal — under the ₹20L GST registration threshold, so no GST charged); we book it as "Platform development & maintenance services" expense.
+- **Split base:** **5% of order subtotal** — goods total, pre-shipping, pre-tax. Tax is passthrough to government; shipping is passthrough to carrier; neither belongs in the partner's compensation base. Stamped on `Order.partnerSharePaisa` at creation so the value is deterministic for refund math even if the percent changes later.
+- **Setting table:** holds two rows: `partner.linked_account_id` (`acc_xxx`) and `partner.split_percent` (default `5.0`). Admin can adjust the percent later; the linked account id rarely changes.
+- **Refund handling:** proportional reverse-transfer. A partial refund of ₹R triggers a `R × split_percent / 100` reverse-transfer claw-back from the partner's share. Documented in the Services Agreement so the partner knows refunds reduce his cut proportionally.
+- **Transfer notes:** the `transfers[]` payload supports per-transfer `notes` — stamp `{ order_number, kind: 'partner_share' }` so reconciliation is grep-able from Razorpay's dashboard.
+- **Settlement** is independent per linked account. Our 95% settles to our bank on T+3; the partner's 5% settles to his bank on T+3.
+- **Customer-facing surface:** none. The 5% is an operating cost (like AWS or Razorpay's MDR) — never on the customer invoice, never in checkout copy, never in tracking emails. Optional: a public "Built by …" credit line in the storefront footer if we want acknowledgment; that's a brand choice, not an invoicing one.
 
 **Razorpay gotchas:**
 
@@ -861,8 +864,9 @@ Decisions that carry known trade-offs, made consciously by the owner, summarized
 | Meta App Review delay blocks Lead Ads | App Review takes 1–3 weeks | Submit during Phase 1, well before Phase 2 launch dependency |
 | Shiprocket API friction | Single provider at launch | `ShippingProvider` interface for swap-out; periodic webhook reconciliation job |
 | Razorpay Route activation delay | Sprint 10 depends on Route being on, not just Razorpay | Activation request typically lands 1–2 days after main account approval — start in Sprint 7 |
-| Partner KYC delay (linked account) | Can't split-pay without an approved `acc_xxx` | Have the partner start KYC in parallel with our main account; capture their PAN + bank details now |
-| Reverse-transfer logic for refunds | Partial refund splits aren't free — every refund touches both sides of the ledger | Lock the rule (proportional vs eat-the-cost) in the partner agreement before Sprint 10; codify in RefundService |
+| Partner KYC delay (linked account) | Can't split-pay without an approved `acc_xxx` | Have the partner start KYC in parallel with our main account; capture his PAN + bank details now |
+| 44AB audit threshold crossed | TDS u/s 194J becomes mandatory the FY after we cross ₹1 cr turnover | Watch quarterly revenue; bake TDS deduction (10%) into the Route split percent (drop from 5 to 4.5) and start quarterly Form 26Q filing the day after we cross |
+| Incorporation event | TDS u/s 194J applies from rupee one for Pvt Ltd / LLP / OPC | If we ever incorporate, add TDS deduction routine on the same day. Don't wait for a quarter to wrap |
 
 ---
 
