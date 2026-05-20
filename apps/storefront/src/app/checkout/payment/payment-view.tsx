@@ -11,7 +11,12 @@ import type { CartEvaluateResponse, CreateOrderRequest } from '@repo/types';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { useCart } from '@/lib/cart-context';
-import { createOrder, CheckoutError, evaluateCart } from '@/lib/checkout-api';
+import {
+  createOrder,
+  CheckoutError,
+  evaluateCart,
+  verifyRazorpayPayment,
+} from '@/lib/checkout-api';
 import { getOrCreateDeviceId } from '@/lib/device-id';
 import { formatINR } from '@/lib/utils';
 import {
@@ -23,6 +28,56 @@ import {
 
 const FLAT_SHIPPING_PAISA = 9900;
 const FREE_SHIP_THRESHOLD_PAISA = 199900;
+
+// Razorpay's hosted Checkout JS. Loaded lazily on the first pay click so
+// non-Razorpay (mock) flows don't pay the network cost. The script attaches
+// a global `Razorpay` constructor we wrap below.
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
+let razorpayLoaderPromise: Promise<void> | null = null;
+
+interface RazorpayCheckoutOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  order_id: string;
+  name?: string;
+  description?: string;
+  prefill?: { contact?: string; email?: string; name?: string };
+  notes?: Record<string, string>;
+  theme?: { color?: string };
+  handler: (response: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
+  modal?: { ondismiss?: () => void };
+}
+interface RazorpayCtor {
+  new (options: RazorpayCheckoutOptions): { open: () => void };
+}
+declare global {
+  interface Window {
+    Razorpay?: RazorpayCtor;
+  }
+}
+
+function loadRazorpayScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Razorpay not available'));
+  if (window.Razorpay) return Promise.resolve();
+  if (razorpayLoaderPromise) return razorpayLoaderPromise;
+  razorpayLoaderPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      razorpayLoaderPromise = null;
+      reject(new Error('Razorpay Checkout script failed to load'));
+    };
+    document.head.appendChild(script);
+  });
+  return razorpayLoaderPromise;
+}
 
 export function PaymentView() {
   const router = useRouter();
@@ -101,6 +156,25 @@ export function PaymentView() {
       };
       const deviceId = getOrCreateDeviceId();
       const result = await createOrder(body, deviceId);
+
+      // Branch on provider — Razorpay opens its hosted Checkout modal here
+      // and stays on this page; mock (and PhonePe later) redirect away.
+      if (result.paymentSession.provider === 'razorpay') {
+        await openRazorpayModal(
+          result.paymentSession.checkoutPayload as RazorpayCheckoutOptions | undefined,
+          result.orderNumber,
+          router,
+          (msg) => {
+            setPaying(false);
+            setError(msg);
+            toast.error(msg);
+          },
+        );
+        // openRazorpayModal handles its own state — leave paying=true until
+        // the modal resolves (success → navigate, failure → callback above).
+        return;
+      }
+
       router.push(result.paymentSession.redirectUrl);
     } catch (err) {
       if (err instanceof CheckoutError && err.body.reason === 'out_of_stock') {
@@ -202,13 +276,78 @@ export function PaymentView() {
           <div className="mt-3 flex items-center justify-center gap-2">
             <Pill tone="neutral" withDot>
               <ShieldCheck className="h-3 w-3" />
-              Mock payment (dev)
+              Secure payment by Razorpay
             </Pill>
           </div>
         </div>
       </aside>
     </div>
   );
+}
+
+// Open Razorpay's Checkout modal with the payload our api built. On
+// successful payment the modal posts { payment_id, order_id, signature }
+// back via the handler callback — we POST those to /public/payments/razorpay/verify,
+// which verifies the HMAC signature server-side and transitions the order.
+// On verify success, redirect to the standard success page.
+//
+// The modal handles its own UI for failures; if the customer dismisses it
+// without paying we fall back to onError so the page can re-enable the
+// button.
+async function openRazorpayModal(
+  payload: RazorpayCheckoutOptions | undefined,
+  orderNumber: string,
+  router: ReturnType<typeof useRouter>,
+  onError: (msg: string) => void,
+): Promise<void> {
+  if (!payload || !payload.key || !payload.order_id) {
+    onError('Razorpay checkout payload missing from server response');
+    return;
+  }
+  try {
+    await loadRazorpayScript();
+  } catch {
+    onError('Could not load the Razorpay checkout. Try again.');
+    return;
+  }
+  const Ctor = window.Razorpay;
+  if (!Ctor) {
+    onError('Razorpay checkout failed to initialise');
+    return;
+  }
+  const checkout = new Ctor({
+    ...payload,
+    handler: async (response) => {
+      try {
+        const verifyResult = await verifyRazorpayPayment({
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        });
+        if (verifyResult.ok) {
+          router.push(`/checkout/success/${verifyResult.orderNumber}`);
+        } else {
+          onError('Payment verification failed. Please contact support.');
+        }
+      } catch (err) {
+        onError((err as Error).message || 'Payment verification failed');
+      }
+    },
+    modal: {
+      ondismiss: () => {
+        // Customer closed the modal without paying. Re-enable the pay button
+        // so they can retry. The order in our DB stays in payment_pending —
+        // they can re-checkout (the idempotencyKey short-circuits back to
+        // the same Order).
+        onError('Payment cancelled. You can retry whenever you\'re ready.');
+      },
+    },
+  });
+  checkout.open();
+  // The handler / ondismiss callbacks above resolve this flow; nothing to
+  // return synchronously. orderNumber is captured in closure for any
+  // verification fallbacks we may add later.
+  void orderNumber;
 }
 
 function SummaryRow({

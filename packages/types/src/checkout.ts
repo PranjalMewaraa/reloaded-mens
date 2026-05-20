@@ -76,6 +76,22 @@ export const createOrderResponseSchema = z.object({
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
 
+// Razorpay-only — the storefront posts this back to us after the Checkout
+// modal completes successfully. Signature is HMAC-SHA256(`${order_id}|${payment_id}`)
+// with the Razorpay key_secret; verified server-side before any state change.
+export const razorpayVerifyRequestSchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});
+export type RazorpayVerifyRequest = z.infer<typeof razorpayVerifyRequestSchema>;
+
+export const razorpayVerifyResponseSchema = z.object({
+  ok: z.boolean(),
+  orderNumber: z.string(),
+});
+export type RazorpayVerifyResponse = z.infer<typeof razorpayVerifyResponseSchema>;
+
 // =====================================================
 // Order detail (for /checkout/success and admin display)
 // =====================================================

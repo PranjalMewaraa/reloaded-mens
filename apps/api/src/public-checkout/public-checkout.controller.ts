@@ -10,7 +10,12 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { createOrderRequestSchema, type CreateOrderRequest } from '@repo/types';
+import {
+  createOrderRequestSchema,
+  razorpayVerifyRequestSchema,
+  type CreateOrderRequest,
+  type RazorpayVerifyRequest,
+} from '@repo/types';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { PublicCheckoutService } from './public-checkout.service.js';
 
@@ -48,6 +53,34 @@ export class PublicCheckoutController {
     const raw = (req as Request & { rawBody?: Buffer }).rawBody?.toString('utf8') ??
       JSON.stringify(req.body);
     return this.checkout.handleMockWebhook(raw, signature ?? '');
+  }
+
+  // Razorpay Checkout modal calls back here with payment_id + order_id +
+  // signature. We verify HMAC-SHA256 of `${order_id}|${payment_id}` against
+  // RAZORPAY_KEY_SECRET. Successful verify transitions the order to confirmed.
+  // The async webhook below arrives ~seconds later and is idempotent.
+  @Post('payments/razorpay/verify')
+  @HttpCode(200)
+  async razorpayVerify(
+    @Body(new ZodValidationPipe(razorpayVerifyRequestSchema)) body: RazorpayVerifyRequest,
+  ) {
+    return this.checkout.verifyRazorpayPayment(body);
+  }
+
+  // Razorpay's own webhook — fires async on every payment event. Backstop
+  // for the modal-callback verify above (in case the customer closes the
+  // tab before the modal can post the verify request). HMAC-SHA256 signature
+  // over the raw body with RAZORPAY_WEBHOOK_SECRET.
+  @Post('payments/webhook/razorpay')
+  @HttpCode(200)
+  async razorpayWebhook(
+    @Req() req: Request,
+    @Headers('x-razorpay-signature') signature: string | undefined,
+  ) {
+    const raw =
+      (req as Request & { rawBody?: Buffer }).rawBody?.toString('utf8') ??
+      JSON.stringify(req.body);
+    return this.checkout.handleRazorpayWebhook(raw, signature ?? '');
   }
 
   @Get('payments/sessions/:sessionId')

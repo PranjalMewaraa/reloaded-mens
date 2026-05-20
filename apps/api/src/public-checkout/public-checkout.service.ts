@@ -5,7 +5,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, prisma } from '@repo/db';
 import {
   ACTOR,
@@ -19,13 +21,15 @@ import {
   type MockWebhookEvent,
   type OrderSnapshot,
   type PaymentStatusResponse,
+  type RazorpayVerifyRequest,
   type ShippingAddress,
 } from '@repo/types';
 import { OrderNumberingService } from './order-numbering.service.js';
 import { PricingService } from './pricing.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { TrackingTokenService } from '../public-tracking/tracking-token.service.js';
-import { PAYMENT_PROVIDER_TOKEN, type PaymentProviderImpl } from '../payments/payment.types.js';
+import { PAYMENT_PROVIDER_TOKEN, type PaymentProviderImpl, type SessionTransfer } from '../payments/payment.types.js';
+import { RazorpayPaymentProvider } from '../payments/razorpay.provider.js';
 import { EMAIL_SERVICE, type EmailService } from '../email/email.types.js';
 
 // Public checkout — order creation, mock webhook ingestion, status polling. Stays
@@ -43,7 +47,22 @@ export class PublicCheckoutService {
     private readonly tracking: TrackingTokenService,
     @Inject(PAYMENT_PROVIDER_TOKEN) private readonly payments: PaymentProviderImpl,
     @Inject(EMAIL_SERVICE) private readonly email: EmailService,
+    private readonly razorpay: RazorpayPaymentProvider,
+    private readonly config: ConfigService,
   ) {}
+
+  // Pull partner config from env. Sourced fresh on each createOrder call so
+  // admins changing env (e.g. switching the partner percent) take effect on
+  // next order without a redeploy of this file specifically — the api still
+  // needs a process restart of course. Future: read from Setting table.
+  private getPartnerConfig(): { accountId: string | null; splitPercent: number } {
+    const accountId =
+      this.config.get<string>('RAZORPAY_PARTNER_LINKED_ACCOUNT_ID')?.trim() || null;
+    const raw = this.config.get<string>('RAZORPAY_PARTNER_SPLIT_PERCENT');
+    const parsed = raw ? Number(raw) : NaN;
+    const splitPercent = Number.isFinite(parsed) ? parsed : 5;
+    return { accountId, splitPercent };
+  }
 
   // -------- POST /public/orders --------
 
@@ -61,9 +80,12 @@ export class PublicCheckoutService {
           orderId: existing.id,
           orderNumber: existing.orderNumber,
           paymentSession: {
-            provider: lastPayment.provider as 'mock' | 'phonepe',
+            provider: lastPayment.provider as 'mock' | 'razorpay' | 'phonepe',
             sessionId: lastPayment.providerSessionId,
             // Re-derive redirect URL — same shape as createSession returned.
+            // For Razorpay this won't reconstruct the modal payload; the
+            // storefront should retry with a fresh order if it really needs
+            // a usable session. Sprint-10 follow-up.
             redirectUrl: `/checkout/processing?session=${lastPayment.providerSessionId}`,
             amountPaisa: lastPayment.amountPaisa,
           },
@@ -175,7 +197,7 @@ export class PublicCheckoutService {
 
     // Lock everything to the DB in one tx — Order/OrderItems, stock decrement,
     // InventoryEvent, coupon usage increment, customer upsert, sequence bump.
-    const { order, orderNumber } = await prisma.$transaction(async (tx) => {
+    const { order, orderNumber, partnerSharePaisa } = await prisma.$transaction(async (tx) => {
       // 1. Stock decrement — conditional update so the OOS race fails with count=0.
       for (const line of lines) {
         const update = await tx.productVariant.updateMany({
@@ -259,7 +281,17 @@ export class PublicCheckoutService {
       const etaTo = new Date();
       etaTo.setDate(etaTo.getDate() + 5);
 
-      // 7. Create order + items. Tracking token is deterministic — sign over the
+      // 7. Compute the partner's share for the Route split. Always done so
+      // the column gets a real value on the row even if Route isn't yet
+      // active — Sprint 10 spec locked: 5% of subtotal (pre-tax, pre-
+      // shipping). Stamped frozen so refund math stays deterministic if
+      // the percent ever changes.
+      const partnerCfg = this.getPartnerConfig();
+      const partnerSharePaisa = partnerCfg.accountId
+        ? Math.floor((subtotalPaisa * partnerCfg.splitPercent) / 100)
+        : 0;
+
+      // 8. Create order + items. Tracking token is deterministic — sign over the
       // (orderId, phone) pair so the email + success page render the same URL.
       // We don't have orderId until after create, so we generate it post-create and
       // update the row in the same tx.
@@ -275,6 +307,7 @@ export class PublicCheckoutService {
           shippingPaisa,
           taxPaisa,
           totalPaisa,
+          partnerSharePaisa,
           appliedCouponCode,
           appliedPromotionIds,
           contactSnapshot: body.contact as unknown as Prisma.InputJsonValue,
@@ -308,7 +341,7 @@ export class PublicCheckoutService {
         data: { trackingToken },
       });
 
-      // 8. Commit promotion usage counters + CouponUsage ledger row. Throws
+      // 9. Commit promotion usage counters + CouponUsage ledger row. Throws
       // 409 with reason 'coupon_limit_reached' if the cap filled between cart
       // evaluation and order placement.
       await this.promotions.commitForOrder(tx, {
@@ -319,7 +352,7 @@ export class PublicCheckoutService {
         phone: body.contact.phone,
       });
 
-      return { order: orderWithToken, orderNumber };
+      return { order: orderWithToken, orderNumber, partnerSharePaisa };
     });
 
     // Order written + stock decremented + counters bumped. Log once with the
@@ -329,11 +362,32 @@ export class PublicCheckoutService {
     // PII to wherever container stdout ends up.
     this.logger.log(
       `order created ${orderNumber} total=${order.totalPaisa} discount=${discountPaisa}` +
-        ` coupon=${appliedCouponCode ?? '-'} phone=…${body.contact.phone.slice(-4)}`,
+        ` coupon=${appliedCouponCode ?? '-'} partnerShare=${partnerSharePaisa}` +
+        ` phone=…${body.contact.phone.slice(-4)}`,
     );
 
-    // 8. Create the payment session — outside the tx because some providers issue
-    // network calls. The mock provider is synchronous but the interface contract is async.
+    // Build the Route transfers payload. Only sent when both the partner
+    // linked account is configured AND there's actually a share > 0.
+    // Razorpay silently ignores transfers in test mode without Route
+    // activation, so this code path is safe to ship before Route is on —
+    // the column is populated, the API call carries the payload, and
+    // disbursement starts the day Route flips on.
+    const partnerCfg = this.getPartnerConfig();
+    const transfers: SessionTransfer[] = [];
+    if (partnerCfg.accountId && partnerSharePaisa > 0) {
+      transfers.push({
+        accountId: partnerCfg.accountId,
+        amountPaisa: partnerSharePaisa,
+        notes: {
+          order_number: orderNumber,
+          kind: 'partner_share',
+        },
+      });
+    }
+
+    // 10. Create the payment session — outside the tx because some providers
+    // issue network calls. The mock provider is synchronous but the interface
+    // contract is async.
     let session;
     try {
       session = await this.payments.createSession({
@@ -342,6 +396,8 @@ export class PublicCheckoutService {
         amountPaisa: order.totalPaisa,
         successRedirectUrl: `/checkout/success/${orderNumber}`,
         customerPhone: body.contact.phone,
+        customerEmail: body.contact.email ?? undefined,
+        transfers: transfers.length > 0 ? transfers : undefined,
       });
     } catch (err) {
       // Payment provider failed AFTER the order row was written. The order
@@ -373,8 +429,219 @@ export class PublicCheckoutService {
         sessionId: session.sessionId,
         redirectUrl: session.redirectUrl,
         amountPaisa: order.totalPaisa,
+        // Razorpay returns a checkoutPayload the storefront opens with the
+        // Razorpay JS modal. Mock leaves it undefined.
+        checkoutPayload: session.checkoutPayload,
       },
     };
+  }
+
+  // -------- POST /public/payments/razorpay/verify --------
+  //
+  // Called by the storefront after the Razorpay Checkout modal returns a
+  // successful payment. Verifies the signature server-side and transitions
+  // the order to `confirmed`. The async webhook arrives ~seconds later and
+  // is idempotent (sees state='confirmed', no-op).
+
+  async verifyRazorpayPayment(body: RazorpayVerifyRequest): Promise<{ ok: boolean; orderNumber: string }> {
+    const ok = this.razorpay.verifyPaymentSignature({
+      razorpayOrderId: body.razorpay_order_id,
+      razorpayPaymentId: body.razorpay_payment_id,
+      signature: body.razorpay_signature,
+    });
+    if (!ok) {
+      this.logger.warn(`Razorpay verify FAILED for rzp_order=${body.razorpay_order_id}`);
+      throw new UnauthorizedException('Invalid payment signature');
+    }
+
+    // Look up our Payment row by Razorpay's order_id (we stored it as
+    // providerSessionId on createOrder).
+    const payment = await prisma.payment.findUnique({
+      where: { providerSessionId: body.razorpay_order_id },
+      include: { order: true },
+    });
+    if (!payment) {
+      throw new NotFoundException(`No payment found for Razorpay order ${body.razorpay_order_id}`);
+    }
+    if (payment.status === 'captured') {
+      // Already confirmed by the webhook beating us to it. Idempotent.
+      return { ok: true, orderNumber: payment.order.orderNumber };
+    }
+
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'captured',
+          capturedAt: now,
+          // Store the Razorpay payment_id alongside the order_id for any later
+          // refund / lookup. providerSessionId stays the order_id (the
+          // long-lived identifier); the payment_id goes into rawWebhook.
+          rawWebhook: {
+            razorpay_order_id: body.razorpay_order_id,
+            razorpay_payment_id: body.razorpay_payment_id,
+            verified_via: 'modal_callback',
+          } as Prisma.InputJsonValue,
+        },
+      });
+      const order = await tx.order.update({
+        where: { id: payment.orderId },
+        data: {
+          state: ORDER_STATE.CONFIRMED,
+          paymentState: PAYMENT_STATE.PAID,
+          confirmedAt: now,
+        },
+        include: { items: { orderBy: { createdAt: 'asc' } } },
+      });
+      await tx.orderEvent.create({
+        data: {
+          orderId: payment.orderId,
+          eventType: ORDER_EVENT_TYPE.PAYMENT_CAPTURED,
+          actor: ACTOR.SYSTEM,
+          message: 'Payment captured via Razorpay',
+          payload: { razorpay_payment_id: body.razorpay_payment_id } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.orderEvent.create({
+        data: {
+          orderId: payment.orderId,
+          eventType: ORDER_EVENT_TYPE.STATE_CONFIRMED,
+          actor: ACTOR.SYSTEM,
+          message: 'Order confirmed',
+        },
+      });
+      return order;
+    });
+
+    this.logger.log(
+      `razorpay verify ${updated.orderNumber} payment_id=${body.razorpay_payment_id}`,
+    );
+
+    // Send the confirmation email outside the tx — flaky transport
+    // shouldn't roll back the order.
+    const snapshot = shapeOrder(updated);
+    if (snapshot.contact.email) {
+      void this.email.sendOrderConfirmation({ to: snapshot.contact.email, order: snapshot });
+    }
+
+    return { ok: true, orderNumber: updated.orderNumber };
+  }
+
+  // -------- POST /public/payments/webhook/razorpay --------
+  //
+  // Async backstop for the modal-callback verify above. Razorpay fires this
+  // for every payment event including payment.captured, payment.failed,
+  // refund.processed, transfer.processed. The handler is idempotent —
+  // verifyRazorpayPayment may have already transitioned the order, in
+  // which case this is a no-op.
+
+  async handleRazorpayWebhook(rawBody: string, signature: string): Promise<{ ok: true }> {
+    if (!this.razorpay.verifyWebhook(rawBody, signature)) {
+      throw new BadRequestException('Invalid webhook signature');
+    }
+    let parsed: { event?: string; payload?: Record<string, unknown> };
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch {
+      throw new BadRequestException('Invalid webhook body');
+    }
+    const event = parsed.event ?? 'unknown';
+    this.logger.log(`razorpay webhook event=${event}`);
+
+    // Only payment.captured + payment.failed trigger state changes here.
+    // refund.processed / transfer.processed are recorded but don't change
+    // order state — refunds were initiated by us, transfers are an FYI.
+    if (event === 'payment.captured' || event === 'payment.failed') {
+      const paymentEntity = (parsed.payload?.payment as { entity?: Record<string, unknown> })?.entity;
+      const razorpayOrderId = (paymentEntity?.order_id as string | undefined) ?? null;
+      const razorpayPaymentId = (paymentEntity?.id as string | undefined) ?? null;
+      if (!razorpayOrderId) {
+        this.logger.warn(`razorpay webhook ${event} missing order_id`);
+        return { ok: true };
+      }
+      const payment = await prisma.payment.findUnique({
+        where: { providerSessionId: razorpayOrderId },
+        include: { order: true },
+      });
+      if (!payment) {
+        // Don't 404 — providers retry on non-2xx. Log and ack.
+        this.logger.warn(`razorpay webhook for unknown order_id ${razorpayOrderId}`);
+        return { ok: true };
+      }
+      if (payment.status !== 'pending') {
+        // Already processed (modal verify beat us). Idempotent.
+        return { ok: true };
+      }
+      const now = new Date();
+      if (event === 'payment.captured') {
+        await prisma.$transaction(async (tx) => {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: 'captured',
+              capturedAt: now,
+              rawWebhook: {
+                razorpay_order_id: razorpayOrderId,
+                razorpay_payment_id: razorpayPaymentId,
+                verified_via: 'webhook',
+              } as Prisma.InputJsonValue,
+            },
+          });
+          await tx.order.update({
+            where: { id: payment.orderId },
+            data: {
+              state: ORDER_STATE.CONFIRMED,
+              paymentState: PAYMENT_STATE.PAID,
+              confirmedAt: now,
+            },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: payment.orderId,
+              eventType: ORDER_EVENT_TYPE.PAYMENT_CAPTURED,
+              actor: ACTOR.SYSTEM,
+              message: 'Payment captured (Razorpay webhook)',
+            },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: payment.orderId,
+              eventType: ORDER_EVENT_TYPE.STATE_CONFIRMED,
+              actor: ACTOR.SYSTEM,
+              message: 'Order confirmed',
+            },
+          });
+        });
+        this.logger.log(`razorpay webhook captured ${payment.order.orderNumber}`);
+      } else {
+        await prisma.$transaction(async (tx) => {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: 'failed',
+              failedAt: now,
+              rawWebhook: { razorpay_order_id: razorpayOrderId } as Prisma.InputJsonValue,
+            },
+          });
+          await tx.order.update({
+            where: { id: payment.orderId },
+            data: { state: ORDER_STATE.PAYMENT_FAILED, paymentState: PAYMENT_STATE.FAILED },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: payment.orderId,
+              eventType: ORDER_EVENT_TYPE.PAYMENT_FAILED,
+              actor: ACTOR.SYSTEM,
+              message: 'Payment failed (Razorpay webhook)',
+            },
+          });
+        });
+        this.logger.warn(`razorpay webhook failed ${payment.order.orderNumber}`);
+      }
+    }
+
+    return { ok: true };
   }
 
   // -------- GET /public/orders/:orderNumber --------

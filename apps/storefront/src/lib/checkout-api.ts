@@ -12,6 +12,8 @@ import type {
   CustomerReturnSummary,
   OrderSnapshot,
   PaymentStatusResponse,
+  RazorpayVerifyRequest,
+  RazorpayVerifyResponse,
   ReturnEligibilityResponse,
   ReturnPhotoUploadResponse,
 } from '@repo/types';
@@ -98,6 +100,20 @@ export async function pollPaymentSession(sessionId: string): Promise<PaymentStat
     { cache: 'no-store' },
   );
   return (await readJsonOrThrow(res)) as PaymentStatusResponse;
+}
+
+// Posts the Razorpay modal callback IDs to our verify endpoint. The api
+// verifies HMAC-SHA256 of `${order_id}|${payment_id}` with the key_secret
+// before transitioning the order. Returns the order number for redirect.
+export async function verifyRazorpayPayment(
+  body: RazorpayVerifyRequest,
+): Promise<RazorpayVerifyResponse> {
+  const res = await fetch(`${BASE}/public/payments/razorpay/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return (await readJsonOrThrow(res)) as RazorpayVerifyResponse;
 }
 
 // ====================================================================

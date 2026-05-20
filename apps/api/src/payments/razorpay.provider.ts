@@ -1,86 +1,260 @@
-import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import Razorpay from 'razorpay';
 import { PAYMENT_PROVIDER } from '@repo/types';
 import type {
   CreateSessionInput,
   CreateSessionResult,
   PaymentProviderImpl,
+  SessionTransfer,
 } from './payment.types.js';
 
-// Sprint 10 — Razorpay (with Route enabled) provider stub.
+// Razorpay (with optional Route enabled) payment provider.
 //
-// Wires through the env so misconfigured deploys explode at boot rather
-// than silently 500ing on the first checkout. The real implementation
-// lands once Razorpay test creds are in `.env`:
+// Flow on the api side:
+//   1. createSession() — POSTs /v1/orders to Razorpay. If transfers are
+//      passed in CreateSessionInput, builds the Route split payload.
+//      Returns the rzp_order_id + a `checkoutPayload` the storefront feeds
+//      into the Razorpay Checkout JS modal.
+//   2. The storefront opens the modal. User pays.
+//   3. Modal returns { razorpay_payment_id, razorpay_order_id, signature }.
+//      Storefront posts these to a new endpoint (verifyPaymentSignature
+//      lives on the controller; this provider just exposes the verify
+//      method as a static-ish helper).
+//   4. Razorpay also POSTs a webhook to our public webhook endpoint with
+//      the same event. verifyWebhook() checks the raw body's HMAC-SHA256
+//      against RAZORPAY_WEBHOOK_SECRET so we don't accept forged events.
 //
-//   createSession  → POST /v1/orders to Razorpay with optional transfers[]
-//                     payload for the partner Route split. Returns the
-//                     Checkout modal payload (key_id + razorpay_order_id +
-//                     prefill) so the storefront can open the modal.
-//   verifyWebhook  → HMAC-SHA256 of the raw body with RAZORPAY_WEBHOOK_SECRET.
-//                     Returns false on mismatch — public webhook controller
-//                     drops the request without side effects.
+// Route specifics:
+//   - When RAZORPAY_PARTNER_LINKED_ACCOUNT_ID is empty, no transfers[]
+//     are sent — money settles 100% to the main account. Useful for the
+//     pre-Route-activation testing window.
+//   - When set, every order carries a transfers[] with one entry for the
+//     partner. Razorpay disburses at capture time; the amounts settle
+//     independently to each linked account.
 //
-// Until then, flipping PAYMENT_PROVIDER=razorpay throws NotImplemented on
-// every call. That's intentional — keeps the slot reserved so the rest of
-// the system can be wired against the interface without the integration
-// existing yet.
+// Tested in test mode against rzp_test_xxx keys without Route activation —
+// the createSession() call works, transfers[] is silently ignored by
+// Razorpay until Route is on. So this provider is wire-able and verifiable
+// end-to-end today; the Route-specific behaviour kicks in once the linked
+// account is approved.
+
+interface RazorpaySdkOrder {
+  id: string;
+  amount: number | string;
+  currency: string;
+  receipt?: string;
+  status: string;
+  notes?: Record<string, string>;
+}
+
+interface RazorpaySdkOrdersResource {
+  create(params: Record<string, unknown>): Promise<RazorpaySdkOrder>;
+}
+
+// The SDK's TS types are loose — narrow them locally so the rest of the
+// service stays typed without us importing from `razorpay/dist/types/*`.
+interface RazorpaySdk {
+  orders: RazorpaySdkOrdersResource;
+}
+
 @Injectable()
 export class RazorpayPaymentProvider implements PaymentProviderImpl {
   readonly name = PAYMENT_PROVIDER.RAZORPAY;
   private readonly logger = new Logger('Payments/Razorpay');
   private readonly keyId: string | undefined;
   private readonly keySecret: string | undefined;
-  // Partner Route config — sourced from env on boot, but the runtime read
-  // of partner.linked_account_id / partner.split_percent prefers the
-  // Setting table so admins can adjust without redeploy. Sprint 10 implements
-  // the Setting lookup; for now the env values are placeholders.
-  private readonly partnerLinkedAccountId: string | undefined;
-  private readonly partnerSplitPercent: number;
+  private readonly webhookSecret: string | undefined;
+  // Lazy-initialised SDK client. Built on first use so a missing-creds
+  // boot doesn't crash the api — the stub-style "warning + throw on call"
+  // experience is preserved.
+  private rzp: RazorpaySdk | null = null;
 
   constructor(config: ConfigService) {
     this.keyId = config.get<string>('RAZORPAY_KEY_ID')?.trim() || undefined;
     this.keySecret = config.get<string>('RAZORPAY_KEY_SECRET')?.trim() || undefined;
-    // RAZORPAY_WEBHOOK_SECRET is consumed by verifyWebhook() — read here at
-    // boot so the warning below fires for missing creds, but not held on
-    // the instance until the real implementation lands.
-    const webhookSecret = config.get<string>('RAZORPAY_WEBHOOK_SECRET')?.trim();
-    this.partnerLinkedAccountId =
-      config.get<string>('RAZORPAY_PARTNER_LINKED_ACCOUNT_ID')?.trim() || undefined;
-    const rawPercent = config.get<string>('RAZORPAY_PARTNER_SPLIT_PERCENT');
-    const parsedPercent = rawPercent ? Number(rawPercent) : NaN;
-    this.partnerSplitPercent = Number.isFinite(parsedPercent) ? parsedPercent : 5;
+    this.webhookSecret = config.get<string>('RAZORPAY_WEBHOOK_SECRET')?.trim() || undefined;
 
-    if (!this.keyId || !this.keySecret || !webhookSecret) {
-      // Don't throw — the stub is wire-able for local dev with no env. Log
-      // a clear warning so the operator knows why /checkout 500s when they
-      // actually try to use this provider in prod.
+    if (!this.keyId || !this.keySecret || !this.webhookSecret) {
       this.logger.warn(
         'Razorpay creds missing. Set RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET + RAZORPAY_WEBHOOK_SECRET, or PAYMENT_PROVIDER=mock.',
       );
     }
-    if (!this.partnerLinkedAccountId) {
+    this.logger.log(
+      `Razorpay provider booted ${this.keyId ? `(${this.keyId.startsWith('rzp_test_') ? 'TEST' : 'LIVE'} mode)` : '(missing creds — calls will throw)'}`,
+    );
+  }
+
+  // PUBLIC KEY ID — the storefront needs this to open the Checkout modal.
+  // Exposing only the public-safe id, never the secret.
+  get publicKeyId(): string | undefined {
+    return this.keyId;
+  }
+
+  async createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+    const client = this.getClient();
+
+    // Build the Razorpay Orders create payload. Amount must be in paisa.
+    const params: Record<string, unknown> = {
+      amount: input.amountPaisa,
+      currency: 'INR',
+      // receipt is shown in the Razorpay dashboard for cross-reference.
+      // Max 40 chars — RLD-NNNNNN well under that.
+      receipt: input.orderNumber,
+      notes: {
+        order_id: input.orderId,
+        order_number: input.orderNumber,
+      },
+    };
+
+    // Route split — only attached when transfers were provided. Each entry
+    // routes a slice of the captured amount to a linked account at
+    // settlement. Razorpay also accepts `on_hold` if you want to delay
+    // disbursement to the partner until the order is delivered (useful
+    // for marketplace setups; not used here).
+    if (input.transfers && input.transfers.length > 0) {
+      params.transfers = input.transfers.map((t) => ({
+        account: t.accountId,
+        amount: t.amountPaisa,
+        currency: 'INR',
+        notes: t.notes ?? {},
+        on_hold: 0,
+      }));
       this.logger.log(
-        'No RAZORPAY_PARTNER_LINKED_ACCOUNT_ID set — Route split disabled, all orders settle 100% to the main account.',
+        `createSession ${input.orderNumber} amount=${input.amountPaisa} transfers=${describeTransfers(input.transfers)}`,
       );
-    } else {
-      this.logger.log(
-        `Route partner config: account=${this.partnerLinkedAccountId} split=${this.partnerSplitPercent}%`,
+    }
+
+    let rzpOrder: RazorpaySdkOrder;
+    try {
+      rzpOrder = await client.orders.create(params);
+    } catch (err) {
+      // Razorpay errors carry a `statusCode` + `error.description` shape.
+      // Rethrow as ServiceUnavailable so the global filter logs the stack
+      // and the storefront sees a useful message rather than 500/empty.
+      this.logger.error(
+        `Razorpay orders.create failed for ${input.orderNumber}`,
+        err instanceof Error ? err.stack : String(err),
       );
+      throw new ServiceUnavailableException(
+        'Could not initialise payment with Razorpay. Try again in a moment.',
+      );
+    }
+
+    // The Checkout modal payload the storefront feeds straight into the
+    // Razorpay JS SDK. key_id is public-safe — the secret stays here.
+    const checkoutPayload: Record<string, unknown> = {
+      key: this.keyId,
+      order_id: rzpOrder.id,
+      amount: rzpOrder.amount,
+      currency: rzpOrder.currency,
+      name: 'Reloaded Mens',
+      description: `Order ${input.orderNumber}`,
+      prefill: {
+        contact: input.customerPhone,
+        ...(input.customerEmail ? { email: input.customerEmail } : {}),
+      },
+      notes: {
+        order_id: input.orderId,
+        order_number: input.orderNumber,
+      },
+      // Theme + behavior knobs — keep minimal for now.
+      theme: { color: '#0A0A0A' },
+    };
+
+    return {
+      sessionId: rzpOrder.id,
+      // The storefront stays on /checkout/payment when the provider is
+      // razorpay — it opens the modal locally rather than navigating
+      // anywhere. Returning the same route is a no-op redirect that
+      // signals "stay put, use checkoutPayload."
+      redirectUrl: `/checkout/payment`,
+      checkoutPayload,
+    };
+  }
+
+  // Webhook signature verification. Razorpay POSTs the raw body to our
+  // registered webhook URL with header `x-razorpay-signature: <hex>`.
+  // The signature is HMAC-SHA256(rawBody) with the webhook secret.
+  verifyWebhook(rawBody: string, signature: string): boolean {
+    if (!this.webhookSecret) {
+      this.logger.error('verifyWebhook called but RAZORPAY_WEBHOOK_SECRET is unset');
+      return false;
+    }
+    if (!signature) return false;
+    try {
+      const expected = createHmac('sha256', this.webhookSecret).update(rawBody).digest('hex');
+      return safeStrEqual(expected, signature);
+    } catch (err) {
+      this.logger.error(
+        'Webhook signature verification crashed',
+        err instanceof Error ? err.stack : String(err),
+      );
+      return false;
     }
   }
 
-  createSession(_input: CreateSessionInput): Promise<CreateSessionResult> {
-    return Promise.reject(
-      new NotImplementedException(
-        'Razorpay payment provider stub. Sprint 10 implementation pending — set PAYMENT_PROVIDER=mock for now.',
-      ),
-    );
+  // Modal-callback signature verification — different secret + different
+  // payload than the webhook. After the Checkout modal completes, the
+  // storefront posts { razorpay_payment_id, razorpay_order_id, signature }
+  // back to us. The signature is HMAC-SHA256(`${order_id}|${payment_id}`)
+  // with the KEY SECRET (not the webhook secret).
+  verifyPaymentSignature(args: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    signature: string;
+  }): boolean {
+    if (!this.keySecret) {
+      this.logger.error('verifyPaymentSignature called but RAZORPAY_KEY_SECRET is unset');
+      return false;
+    }
+    if (!args.signature) return false;
+    try {
+      const expected = createHmac('sha256', this.keySecret)
+        .update(`${args.razorpayOrderId}|${args.razorpayPaymentId}`)
+        .digest('hex');
+      return safeStrEqual(expected, args.signature);
+    } catch (err) {
+      this.logger.error(
+        'Payment signature verification crashed',
+        err instanceof Error ? err.stack : String(err),
+      );
+      return false;
+    }
   }
 
-  verifyWebhook(_rawBody: string, _signature: string): boolean {
-    throw new NotImplementedException(
-      'Razorpay webhook verification not implemented. Sprint 10 ships the HMAC-SHA256 check against RAZORPAY_WEBHOOK_SECRET.',
-    );
+  // Lazy-build the SDK client. Throws if creds are missing, so any call
+  // path that depends on Razorpay surfaces the misconfiguration as a
+  // 503 rather than a cryptic "cannot read property X of undefined".
+  private getClient(): RazorpaySdk {
+    if (this.rzp) return this.rzp;
+    if (!this.keyId || !this.keySecret) {
+      throw new ServiceUnavailableException(
+        'Razorpay is not configured. Set RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET or switch PAYMENT_PROVIDER=mock.',
+      );
+    }
+    // The Razorpay SDK uses CommonJS; TS sees its default export as the
+    // constructor we want. `unknown` cast keeps strict-mode happy.
+    const RazorpayCtor = Razorpay as unknown as new (opts: {
+      key_id: string;
+      key_secret: string;
+    }) => RazorpaySdk;
+    this.rzp = new RazorpayCtor({ key_id: this.keyId, key_secret: this.keySecret });
+    return this.rzp;
   }
+}
+
+// Constant-time string equality so signature comparison isn't subject to
+// timing attacks. Buffers must be the same length — wrap shorter strings
+// in a no-match path.
+function safeStrEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
+}
+
+function describeTransfers(ts: SessionTransfer[]): string {
+  return ts.map((t) => `${t.accountId}:${t.amountPaisa}`).join(',');
 }
