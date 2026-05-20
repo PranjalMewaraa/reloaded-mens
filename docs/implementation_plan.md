@@ -31,7 +31,7 @@ Two-phase build:
 
 **Critical principle:** every external service is behind an interface from day one. When MVP uses a stub payment provider, the contract is the same one the real PhonePe implementation will satisfy later. No throwaway code.
 
-**Payment gateway:** PhonePe Payment Gateway selected for primary integration (high UPI success rates, current zero-fee promotional pricing). PhonePe-specific risks and buffers are noted in Sprint 10.
+**Payment gateway:** Razorpay selected for primary integration, with the **Route** product enabled. The decision is driven by a revenue-share arrangement with one partner who takes 5% of every order — Route handles the split natively at capture time, so we avoid building a reconciliation cron + monthly wire transfer system. Previous plan was PhonePe PG; the switch is documented in the Sprint 10 spec and ROADMAP.md.
 
 ---
 
@@ -56,7 +56,7 @@ Two-phase build:
 
 ### 2.2 What's OUT (deferred to Full Product)
 
-- PhonePe PG (real payments)
+- Razorpay (real payments + Route partner split)
 - Shiprocket (real shipping)
 - WhatsApp BSP integration
 - MSG91 SMS + OTP (email OTP placeholder in MVP)
@@ -68,7 +68,7 @@ Two-phase build:
 - Attribution dashboard
 - Advanced promotions (BOGO, tiered)
 
-This sequencing means the MVP is testable end-to-end without external setup work (DLT registration, Meta App Review, WhatsApp template approval, PhonePe onboarding all happen during Phase 1, ready to plug in at start of Phase 2).
+This sequencing means the MVP is testable end-to-end without external setup work (DLT registration, Meta App Review, WhatsApp template approval, Razorpay + Route onboarding all happen during Phase 1, ready to plug in at start of Phase 2).
 
 ---
 
@@ -203,8 +203,8 @@ This sequencing means the MVP is testable end-to-end without external setup work
   - Returns mock payment session token
 - **Payment provider interface** with implementations:
   - `MockPaymentProvider` — auto-succeeds after 2s delay; toggleable to fail in admin settings
-  - `PhonePePaymentProvider` — stub class, throws `NotImplemented` (placeholder for Phase 2)
-  - Future provider slots stay open (Razorpay/Cashfree if needed later)
+  - `RazorpayPaymentProvider` — stub class, throws `NotImplemented` (placeholder for Phase 2; lands fully in Sprint 10 with Route enabled)
+  - Future provider slots stay open (PhonePe / Cashfree if needed later)
 - Mock webhook endpoint simulating a payment webhook for `payment.captured` / `payment.failed`
 - On `payment.captured`: order moves to `confirmed`, transactional email queued
 - Idempotency on order creation (client-generated key)
@@ -456,7 +456,8 @@ Replace MVP placeholders with real production integrations and add remaining fea
 
 Don't wait until Phase 2 starts. These have lead times.
 
-- **PhonePe PG account** — register business, KYC (PAN, GSTIN, bank verification, current account proof), get sandbox + production credentials. Onboarding usually takes 3–7 working days. **Confirm zero-fee promotional pricing terms in writing** during onboarding.
+- **Razorpay account + Route activation** — register business, KYC (PAN, GSTIN, bank verification, current account proof) for the main merchant account, then raise a separate Route activation request once approved. Main account is usually 1–3 working days; Route activation another 1–2. Confirm current MDR rates in writing (cards/NB ~2% + ₹3; UPI usually 0% under ₹2k). Switched FROM PhonePe to Razorpay so we can split-pay our 5% partner cut natively via Route — see ROADMAP.md §"Razorpay Route — partner split" for the full context.
+- **Partner linked account on Razorpay** — your revenue-share partner needs a linked account under your main Razorpay (or their own Razorpay registered as a linked account to yours). They submit their own PAN + bank for KYC. The `acc_xxx` id this produces is what gets stamped into Setting.partner_linked_account_id.
 - **Shiprocket account** — register, KYC, configure pickup address, negotiate rates
 - **MSG91 account + DLT registration** — DLT alone takes 1–2 weeks; submit templates for OTP and order notifications
 - **WhatsApp Business API via BSP** (Interakt / AiSensy / Gallabox) — select vendor, onboard, submit ~10 templates for approval (24–48h each)
@@ -469,44 +470,52 @@ Don't wait until Phase 2 starts. These have lead times.
 
 ---
 
-### Sprint 10 — Real payments via PhonePe PG + GST invoice (Week 11)
+### Sprint 10 — Real payments via Razorpay (Route) + GST invoice (Week 11)
 
-This is the most-changed sprint vs the Razorpay version. Allow **3–5 day buffer** beyond what you would for Razorpay because PhonePe PG's developer ecosystem is less mature.
+Provider switched from PhonePe to **Razorpay with Route enabled** to support a fixed-percentage revenue share with one partner. See ROADMAP.md §"Razorpay Route — partner split" for the business rationale; this section is the technical spec.
 
-**PhonePe PG integration:**
+**Razorpay integration:**
 
-- Implement `PhonePePaymentProvider` against the existing payment interface
-- **PhonePe's checkout integration model** — confirm with the agency:
-  - PhonePe offers SDK-less (redirect-based) integration as default — customer redirected to PhonePe's hosted payment page, then redirected back to your callback URL
-  - SDK-based integration is available for higher polish but adds complexity
-  - **For your scope, SDK-less is the right pick** — simpler, faster to build, supports all payment methods (UPI, cards, net banking) on PhonePe's page
+- Implement `RazorpayPaymentProvider` against the existing `PaymentProvider` interface. Drop `MockProvider` from the production env; keep it as the local-dev default.
+- **Checkout integration model:**
+  - Razorpay Standard Checkout — JS modal on the storefront, opened with `options.key + options.order_id` from the backend.
+  - For UPI on mobile, the modal triggers the OS UPI app intent flow automatically.
+  - All payment methods (UPI, cards, net banking, wallets) are surfaced on the modal — no per-method UI work on our side.
 - **API endpoints to integrate:**
-  - **Initiate payment:** backend POSTs order details + unique `merchantTransactionId` + redirect URL + callback URL → PhonePe returns a redirect URL → customer goes there
-  - **Status check:** backend polls PhonePe's status endpoint with `merchantTransactionId` after redirect-back, as backstop to the webhook
-  - **Refund:** backend POSTs refund request with original transaction ID → PhonePe processes → webhook confirms
-- **Webhook handler:**
-  - PhonePe sends a callback to your registered URL with payment status
-  - **Webhook signature verification:** PhonePe uses an `X-VERIFY` header with a SHA256 hash of payload + endpoint + salt — implement carefully; get it wrong and you accept unverified payments
-- **Order flow with PhonePe:**
-  1. Customer clicks "Pay" → backend creates Order in `placed` state, generates `merchantTransactionId`
-  2. Backend calls PhonePe initiate API → gets redirect URL
-  3. Customer redirected to PhonePe's hosted payment page
-  4. Customer pays (UPI/card/net banking) on PhonePe's page
-  5. Customer redirected back to your callback URL with status
-  6. PhonePe webhook posts authoritative status to your backend
-  7. Backend verifies webhook signature, transitions order to `confirmed` or `payment_failed`
-  8. Backstop: backend polls PhonePe status API after redirect-back to confirm
-- **UPI intent flow on mobile:** PhonePe's payment page auto-detects UPI apps installed on the customer's phone and offers one-tap UPI app launch (no manual VPA entry). This is PhonePe's killer feature for mobile conversion — verify it works in testing.
-- **Idempotency** via `merchantTransactionId` (your unique key per order attempt)
-- **Test thoroughly with PhonePe sandbox** — sandbox UPI test numbers, sandbox card details, simulated failure scenarios. Sandbox is less polished than Razorpay's; expect some friction.
-- **Switch toggle:** `PAYMENT_PROVIDER=mock | phonepe` in env
+  - **Create order:** backend POSTs `{ amount, currency, receipt, notes, transfers }` to `POST /v1/orders` → Razorpay returns `order_id`. The `transfers[]` array is the Route split; one entry per recipient (here just the partner's linked account).
+  - **Verify payment:** the JS modal returns `{ razorpay_payment_id, razorpay_order_id, razorpay_signature }` to the storefront. The storefront POSTs these to our backend, which verifies the HMAC-SHA256 signature against `RAZORPAY_KEY_SECRET`.
+  - **Refund:** backend POSTs to `POST /v1/payments/{payment_id}/refund` for full or partial. For Route, we ALSO need to issue a "reverse transfer" against the partner's split — Razorpay's `POST /v1/payments/{payment_id}/transfers/{transfer_id}/reversals`.
+  - **Status fetch:** backstop via `GET /v1/payments/{payment_id}` if the webhook is delayed.
+- **Webhook handler:** Razorpay POSTs to our registered webhook URL with events like `payment.captured`, `payment.failed`, `refund.processed`, `transfer.processed`. Signature: HMAC-SHA256 of the raw body with `RAZORPAY_WEBHOOK_SECRET`. Verify in middleware before any side effects.
+- **Order flow:**
+  1. Customer clicks "Pay" → backend creates internal Order in `payment_pending`, computes total + the partner's 5% cut.
+  2. Backend calls Razorpay `POST /v1/orders` with `transfers: [{ account: partner_linked_account, amount: cut_paisa, currency: 'INR', notes: { order_number, kind: 'partner_share' } }]`.
+  3. Backend returns `razorpay_order_id` + `key_id` to the storefront.
+  4. Storefront opens Razorpay Checkout modal.
+  5. Customer pays.
+  6. Modal returns the three IDs to the storefront, which posts them to our verify endpoint.
+  7. Backend verifies signature, transitions order to `confirmed`, records both the parent payment AND the transfer record.
+  8. Webhook arrives asynchronously and is idempotent — same signature, no double-state-change.
+- **Idempotency** via Razorpay's `order_id` (one per order attempt; retries on the same Order reuse it). Our internal Payment row has a unique constraint on `providerSessionId` (= razorpay_order_id).
+- **Sandbox testing:** Razorpay's test mode has test UPI VPAs (`success@razorpay`, `failure@razorpay`), test card numbers, simulated webhook events. Significantly more polished than PhonePe's sandbox.
+- **Switch toggle:** `PAYMENT_PROVIDER=mock | razorpay` in env.
 
-**PhonePe gotchas the team should plan for:**
+**Route (partner split) specifics:**
 
-- Onboarding paperwork is more involved than Razorpay's — get this started in Sprint 7 of Phase 1, not the day before Sprint 10
-- PhonePe's docs have improved but still have inconsistencies; expect 2–3 small surprises during integration. Support is responsive but ticket-based.
-- The redirect-based flow means the "thank you" page should handle three cases: (a) successful redirect with payment success, (b) successful redirect with payment failure (show retry option), (c) customer never returned (rely on webhook + a background reconciliation job that polls PhonePe for pending transactions every 5 minutes for the first hour after order placement)
-- **The promotional zero-fee pricing** — read the contract carefully. Often these promos are "first 6 months free" or "first ₹X GMV free." Plan for the day it ends.
+- Decide ONCE the split base — % of subtotal vs gross — and stamp it on every Order at creation time so re-evaluation is deterministic. Recommendation: 5% of subtotal (pre-shipping, pre-tax) to keep refund math sane and exclude tax-passthrough revenue from the partner's cut.
+- Setting table holds two rows: `partner.linked_account_id` (`acc_xxx`) and `partner.split_percent` (default `5`). Admin can adjust the percent later; the linked account id rarely changes.
+- Refund handling decision tree:
+  - **Full refund**: refund the customer for the full amount AND issue a reverse-transfer for the partner's share back to us.
+  - **Partial refund** (most returns): proportional reverse-transfer (refund_amount × split_percent), so the partner shares the loss proportionally. Document this in the partner agreement.
+- The `transfers[]` payload supports per-transfer `notes` — stamp the order number and `kind: 'partner_share'` there so reconciliation is grep-able from Razorpay's dashboard.
+- **Settlement** is independent per linked account. Our 95% settles to our bank on T+3; the partner's 5% settles to their bank on T+3 (or whatever their account's cycle is).
+
+**Razorpay gotchas:**
+
+- The `key_secret` and `webhook_secret` are different values. Mixing them silently makes signature verification "fail open" if you only check one — confirm both are non-empty at boot.
+- `transfers[].amount` is in paisa, NOT rupees. Off-by-100 here would 100x the partner's cut.
+- Refund reversals on Route can be issued from the dashboard, but the audit trail is cleaner if we do them through the API tied to our refund flow.
+- Test mode test webhooks need to be triggered manually from the dashboard or via the `razorpay-cli`; they don't auto-fire on a sandbox payment the way production does.
 
 **GST tax invoice:**
 
@@ -517,7 +526,7 @@ This is the most-changed sprint vs the Razorpay version. Allow **3–5 day buffe
 - Available for download from order tracking page
 - Per-FY counter reset
 
-**Acceptance:** End-to-end purchase via PhonePe sandbox. UPI flow opens UPI app directly on mobile (intent flow). Card and net banking work. Webhook signature verified. Order confirmation email includes GST-compliant PDF invoice. Refund issued via PhonePe API end-to-end. Reconciliation job catches a manually-orphaned transaction within 5 minutes.
+**Acceptance:** End-to-end purchase via Razorpay test mode. UPI test VPA (`success@razorpay`) opens UPI app intent on mobile. Card + net banking work via the Standard Checkout modal. HMAC-SHA256 webhook signature verified on both `payment.captured` and `transfer.processed`. Order confirmation email includes GST-compliant PDF invoice. The 5% partner cut shows up as a Transfer in the Razorpay dashboard, settled to the linked account. Full refund triggers a reverse-transfer that claws back the partner's share; partial refund does so proportionally.
 
 ---
 
@@ -812,7 +821,7 @@ These apply throughout both phases — not separate sprints, but enforced standa
 | 1 — MVP | 8 | 9 | Customer auth, leads (manual), reviews (text) |
 | 1 — MVP | 9 | 10 | Reports + polish + hardening |
 | **MVP complete** | | | **Demonstrable product, no real integrations** |
-| 2 — Full | 10 | 11 | PhonePe PG + GST invoice *(+3–5 day buffer)* |
+| 2 — Full | 10 | 11 | Razorpay (Route enabled) + GST invoice |
 | 2 — Full | 11 | 12 | Shiprocket |
 | 2 — Full | 12 | 13 | SMS + WhatsApp + real notifications |
 | 2 — Full | 13 | 14 | Meta Lead Ads + abandoned cart |
@@ -820,7 +829,7 @@ These apply throughout both phases — not separate sprints, but enforced standa
 | 2 — Full | 15 | 16 | Photo reviews + remaining promotions + R2 migration |
 | 2 — Full | 16 | 17 | Performance + accessibility + SEO hardening |
 | 2 — Full | 17 | 18 | Observability + launch prep |
-| **Full Product complete** | | | **Launch-ready on PhonePe** |
+| **Full Product complete** | | | **Launch-ready on Razorpay (Route)** |
 
 **Total: ~18 weeks (~4.5 months)** with 2–3 devs working full-time. Buffer of 1–2 weeks for unplanned work, holidays, design review cycles.
 
@@ -831,10 +840,10 @@ These apply throughout both phases — not separate sprints, but enforced standa
 - Each sprint is sized for one calendar week with a small team — assume some slip; 1.2–1.5× buffer in real planning is wise
 - "Acceptance" criteria per sprint are the gate; don't move on until they pass
 - **Pre-Phase-2 setup tasks must start during Sprints 7–9** of Phase 1 — otherwise Phase 2 stalls in week 11 waiting on external approvals
-- PhonePe PG onboarding specifically should start in Sprint 7 to give time for KYC and contract review before Sprint 10
+- Razorpay onboarding (main account KYC + a separate Route activation request) should start in Sprint 7 to give both approvals time to land before Sprint 10. Partner's linked-account KYC runs in parallel.
 - The MVP → Full transition is a natural pause point for: owner feedback, agency review, design iteration, fundraising milestone, or just a breather before the integration sprint
 - Open items from the architecture doc (promotion spec, hosting choice, pincode list) need to land by their flagged sprint or that sprint slips
-- If the PhonePe promotional pricing terms are unfavorable (e.g., promo expires too soon, or unrealistic GMV cap), revisit the gateway choice before Sprint 10 — your `PaymentProvider` interface makes this a 1-sprint switch to Razorpay if you change your mind
+- Confirm BEFORE Sprint 10 coding: (a) split base — % of subtotal vs gross, and (b) refund-handling rule — proportional reverse-transfer on partial refunds vs eat the partner's cut as a cost. These change the Order + Refund data shape and are awkward to retrofit.
 
 ---
 
@@ -851,8 +860,9 @@ Decisions that carry known trade-offs, made consciously by the owner, summarized
 | DPDP non-compliance from template Privacy Policy | Template at launch | Lawyer review within 90 days; flagged as compliance debt |
 | Meta App Review delay blocks Lead Ads | App Review takes 1–3 weeks | Submit during Phase 1, well before Phase 2 launch dependency |
 | Shiprocket API friction | Single provider at launch | `ShippingProvider` interface for swap-out; periodic webhook reconciliation job |
-| PhonePe ecosystem maturity | Primary payment gateway | `PaymentProvider` interface allows Razorpay fallback; +3–5 day buffer in Sprint 10 |
-| PhonePe promotional pricing expiry | Lower fees now | Verify contract terms; budget for standard pricing post-promo |
+| Razorpay Route activation delay | Sprint 10 depends on Route being on, not just Razorpay | Activation request typically lands 1–2 days after main account approval — start in Sprint 7 |
+| Partner KYC delay (linked account) | Can't split-pay without an approved `acc_xxx` | Have the partner start KYC in parallel with our main account; capture their PAN + bank details now |
+| Reverse-transfer logic for refunds | Partial refund splits aren't free — every refund touches both sides of the ledger | Lock the rule (proportional vs eat-the-cost) in the partner agreement before Sprint 10; codify in RefundService |
 
 ---
 
