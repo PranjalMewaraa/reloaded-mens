@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { prisma } from '@repo/db';
-import type { CreatePosOrderRequest, PosOrderListQuery } from '@repo/types';
+import type { CreatePosOrderRequest, PosOrderListQuery, PromotionAction } from '@repo/types';
 import { BillGenerator } from './bill.generator.js';
 import { resolve } from 'node:path';
 
@@ -169,24 +169,37 @@ export class PosService {
       return { variant: v, quantity: item.quantity, pricePaisa, totalPaisa };
     });
 
-    // 3. Apply coupon if provided (simple lookup, no complex promotion logic for POS)
+    // 3. Apply coupon if provided — look up via Promotion.actions JSON
     let discountPaisa = 0;
     let appliedCoupon: string | null = null;
     if (body.couponCode) {
       const coupon = await prisma.coupon.findFirst({
-        where: {
-          code: body.couponCode.toUpperCase().trim(),
-          isActive: true,
-          deletedAt: null,
+        where: { code: body.couponCode.toUpperCase().trim(), isActive: true },
+        include: {
+          promotion: {
+            select: { isActive: true, actions: true, validFrom: true, validTo: true },
+          },
         },
       });
-      if (coupon) {
-        if (coupon.discountType === 'percentage') {
-          discountPaisa = Math.floor((subtotalPaisa * (coupon.discountValue as number)) / 100);
-        } else {
-          discountPaisa = Math.min(coupon.discountValue as number, subtotalPaisa);
+      if (coupon && coupon.promotion.isActive) {
+        const now = new Date();
+        const withinWindow =
+          (!coupon.promotion.validFrom || coupon.promotion.validFrom <= now) &&
+          (!coupon.promotion.validTo || coupon.promotion.validTo >= now);
+        if (withinWindow) {
+          const actions = coupon.promotion.actions as PromotionAction[];
+          const action = actions.find(
+            (a) => a.type === 'percent_off_order' || a.type === 'flat_off_order',
+          );
+          if (action) {
+            if (action.type === 'percent_off_order') {
+              discountPaisa = Math.floor((subtotalPaisa * action.percent) / 100);
+            } else if (action.type === 'flat_off_order') {
+              discountPaisa = Math.min(action.amountPaisa, subtotalPaisa);
+            }
+            appliedCoupon = coupon.code;
+          }
         }
-        appliedCoupon = coupon.code;
       }
     }
 

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, verifySession } from '@/lib/auth';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page and Next.js internals through
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/_next') ||
@@ -20,11 +19,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const email = verifySession(cookieValue);
+  const email = await verifySession(cookieValue);
   if (!email) {
     const loginUrl = new URL('/login', request.url);
     const response = NextResponse.redirect(loginUrl);
-    // Clear the invalid cookie
     response.cookies.delete(SESSION_COOKIE);
     return response;
   }

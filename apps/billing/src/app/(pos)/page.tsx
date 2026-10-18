@@ -539,7 +539,6 @@ function UpiQrModal({
 
           {qrDataUrl ? (
             <div className="bg-white p-3 rounded-xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qrDataUrl} alt="UPI QR Code" className="w-56 h-56" />
             </div>
           ) : (

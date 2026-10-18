@@ -19,7 +19,7 @@ export async function loginAction(formData: FormData) {
     return { error: 'Invalid credentials' };
   }
 
-  const sessionValue = signSession(email);
+  const sessionValue = await signSession(email);
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, sessionValue, {
