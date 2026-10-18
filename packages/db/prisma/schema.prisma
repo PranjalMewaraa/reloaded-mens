@@ -323,6 +323,11 @@ model Order {
   // detail looks up the named promotions for the totals card breakdown.
   appliedPromotionIds String[] @default([])
 
+  // POS (billing app) — 'storefront' | 'pos'. Default covers all pre-POS orders.
+  source      String  @default("storefront")
+  // URL of the generated PDF bill file. Only set for POS orders.
+  billPdfUrl  String?
+
   customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
   items          OrderItem[]
   payments       Payment[]

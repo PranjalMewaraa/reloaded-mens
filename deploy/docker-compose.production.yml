@@ -43,6 +43,18 @@ services:
         limits:
           memory: 768M
 
+  billing:
+    image: ghcr.io/${GITHUB_USER}/menswear-billing:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - web
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
   admin:
     image: ghcr.io/${GITHUB_USER}/menswear-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped

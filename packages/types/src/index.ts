@@ -13,3 +13,4 @@ export * from './leads.js';
 export * from './reviews.js';
 export * from './admin-staff.js';
 export * from './reports.js';
+export * from './pos.js';

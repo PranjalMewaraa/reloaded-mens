@@ -276,6 +276,14 @@ async function main() {
       'serviceable_pincodes',
       { prefixes: ['56', '110', '400', '600', '700', '500', '380', '411'], exact: [] },
     ],
+    // POS / billing app settings
+    ['pos.upi_id', process.env.POS_UPI_ID ?? ''],
+    ['pos.upi_display_name', process.env.BUSINESS_NAME ?? 'Reloaded Mens'],
+    ['pos.bill_footer_note', 'Thank you for shopping with us! Visit again 🙏'],
+    // business.name alias used by POS service
+    ['business.name', process.env.BUSINESS_NAME ?? 'Reloaded Menswear'],
+    ['business.address', process.env.BUSINESS_ADDRESS ?? 'L-285 Sector 23 Sanjay Nagar, Ghaziabad'],
+    ['business.phone_primary', process.env.BUSINESS_PHONE_PRIMARY ?? '+919958247377'],
   ];
   for (const [key, value] of settings) {
     await prisma.setting.upsert({

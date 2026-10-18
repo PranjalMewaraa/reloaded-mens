@@ -90,6 +90,37 @@ admin.reloadedmens.in {
 # strip CORS headers and break every client-side call. The API enforces
 # its own auth — public endpoints are public by design.
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Billing / POS app — protected by its own login. noindex to keep it off search.
+# ----------------------------------------------------------------------------
+billing.reloadedmens.in {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	reverse_proxy billing:3002 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /data/access-billing.log {
+			roll_size 10MiB
+			roll_keep 3
+			roll_keep_for 720h
+		}
+		format console
+	}
+}
+
 api.reloadedmens.in {
 	encode gzip zstd
 

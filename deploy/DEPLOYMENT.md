@@ -42,7 +42,8 @@ proxy would otherwise eat the challenge.
 | A    | `@`     | `151.185.43.166`   | DNS only     |
 | A    | `www`   | `151.185.43.166`   | DNS only     |
 | A    | `admin` | `151.185.43.166`   | DNS only     |
-| A    | `api`   | `151.185.43.166`   | DNS only     |
+| A    | `api`     | `151.185.43.166`   | DNS only     |
+| A    | `billing` | `151.185.43.166`   | DNS only     |
 
 Verify propagation:
 
