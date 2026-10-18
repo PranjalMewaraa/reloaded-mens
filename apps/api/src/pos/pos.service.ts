@@ -59,7 +59,7 @@ export class PosService {
       storeName: get('business.name', 'Reloaded Mens'),
       storeAddress: get('business.address', 'L-285 Sector 23 Sanjay Nagar, Ghaziabad'),
       storePhone: get('business.phone_primary', '+919958247377'),
-      gstin: get('business.gstin', null) || null,
+      gstin: get('business.gstin') || null,
     };
   }
 

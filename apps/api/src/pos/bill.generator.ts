@@ -81,7 +81,6 @@ export class BillGenerator {
       doc.pipe(stream);
 
       const pageW = 226 - 24; // content width after margins
-      const center = pageW / 2;
 
       // ── Header ──────────────────────────────────────────────────────
       doc
