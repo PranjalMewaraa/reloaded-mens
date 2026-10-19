@@ -12,8 +12,10 @@ export interface ProductVariant {
   sku: string;
   size: string;
   color: string;
-  price: number; // paise
-  stock: number;
+  label: string;
+  pricePaisa: number;
+  stockCount: number;
+  isActive: boolean;
   imageUrl?: string;
 }
 
@@ -24,9 +26,16 @@ export interface PosProduct {
   variants: ProductVariant[];
 }
 
+export interface UpiSlot {
+  upiId: string;
+  label: string;
+}
+
 export interface PosSettings {
   upiId: string;
-  upiName: string;
+  upiDisplayName: string;
+  upiSlots: UpiSlot[];
+  upiActiveIndex: number;
 }
 
 export interface CreatePosOrderRequest {
@@ -69,7 +78,6 @@ export interface CreatePosOrderResponse {
 }
 
 export async function searchProducts(q: string): Promise<PosProduct[]> {
-  if (!q.trim()) return [];
   const res = await fetch(
     `${API_URL}/api/v1/pos/products/search?q=${encodeURIComponent(q)}`,
     { headers: authHeaders(), cache: 'no-store' }
@@ -111,10 +119,17 @@ export async function getPosSettings(): Promise<PosSettings> {
     cache: 'no-store',
   });
   if (!res.ok) {
-    // Fall back to defaults if endpoint not yet available
-    return { upiId: 'merchant@upi', upiName: 'Reloaded Mens' };
+    return { upiId: '', upiDisplayName: 'Reloaded Mens', upiSlots: [], upiActiveIndex: 0 };
   }
   return res.json();
+}
+
+export async function switchUpiActive(index: number): Promise<void> {
+  await fetch(`${API_URL}/api/v1/pos/upi/switch`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ index }),
+  });
 }
 
 export async function applyCoupon(

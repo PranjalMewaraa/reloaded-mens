@@ -29,6 +29,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { AdminStaffModule } from './admin-staff/admin-staff.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { PosModule } from './pos/pos.module.js';
+import { AdminSettingsModule } from './admin-settings/admin-settings.module.js';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ ThrottlerModule.forRoot([
     AdminStaffModule,
     ReportsModule,
     PosModule,
+    AdminSettingsModule,
   ],
   controllers: [HealthController],
   providers: [

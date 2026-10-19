@@ -83,7 +83,12 @@ export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
     jar.set({
       name: parsed.name,
       value: parsed.value,
-      path: parsed.path,
+      // Use '/' so the browser sends the cookie on every admin-app path.
+      // The API sets stage_token with path='/api/v1/auth' (scoped to its own
+      // routes), but mirrored onto the admin origin those API paths never exist,
+      // so the browser would never include the cookie in requests to /totp/enroll
+      // or any other admin page.
+      path: '/',
       // Forward Domain (e.g. `.reloadedmens.in`) so the same cookie is valid
       // on every subdomain — required for client-side fetches from
       // admin.reloadedmens.in to api.reloadedmens.in to carry credentials.

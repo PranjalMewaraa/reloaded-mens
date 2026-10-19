@@ -6,6 +6,7 @@ import {
   Post,
   Query,
   UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   createPosOrderSchema,
@@ -16,6 +17,7 @@ import {
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { PosAuthGuard } from './pos-auth.guard.js';
 import { PosService } from './pos.service.js';
+import { AdminSettingsService } from '../admin-settings/admin-settings.service.js';
 
 /**
  * POS endpoints for the billing.reloadedmens.in app.
@@ -24,12 +26,26 @@ import { PosService } from './pos.service.js';
 @Controller('pos')
 @UseGuards(PosAuthGuard)
 export class PosController {
-  constructor(private readonly pos: PosService) {}
+  constructor(
+    private readonly pos: PosService,
+    private readonly settings: AdminSettingsService,
+  ) {}
 
-  /** POS settings — UPI ID, display name, store info */
+  /** POS settings — UPI ID, display name, store info, all UPI slots */
   @Get('settings')
-  getSettings() {
-    return this.pos.getSettings();
+  async getSettings() {
+    const [base, upi] = await Promise.all([
+      this.pos.getSettings(),
+      this.settings.getPosUpi(),
+    ]);
+    return { ...base, upiSlots: upi.slots, upiActiveIndex: upi.activeIndex };
+  }
+
+  /** Switch the active UPI slot (biller uses this live during billing) */
+  @Post('upi/switch')
+  @HttpCode(200)
+  switchUpi(@Body('index', ParseIntPipe) index: number) {
+    return this.settings.switchUpiActive(index);
   }
 
   /** Product search. q is the search term (empty = all). */

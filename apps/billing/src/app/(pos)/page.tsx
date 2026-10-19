@@ -20,11 +20,13 @@ import {
   createPosOrder,
   getPosSettings,
   applyCoupon,
+  switchUpiActive,
   type PosProduct,
   type ProductVariant,
   type PosSettings,
+  type UpiSlot,
   type CreatePosOrderResponse,
-} from '@/lib/api';
+} from './actions';
 
 interface CartItem {
   variantId: string;
@@ -59,7 +61,6 @@ function ProductGrid({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setProducts([]); return; }
     setLoading(true);
     try {
       const results = await searchProducts(q);
@@ -68,6 +69,11 @@ function ProductGrid({
       setLoading(false);
     }
   }, []);
+
+  // Load all products on mount, then debounce on query changes.
+  useEffect(() => {
+    doSearch('');
+  }, [doSearch]);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -81,9 +87,9 @@ function ProductGrid({
       productId: product.id,
       productName: product.name,
       variantLabel: `${variant.size} · ${variant.color}`,
-      pricePaisa: variant.price,
+      pricePaisa: variant.pricePaisa,
       imageUrl: variant.imageUrl ?? product.imageUrl,
-      stock: variant.stock,
+      stock: variant.stockCount,
     });
     setVariantOpen(null);
   }
@@ -161,12 +167,12 @@ function ProductGrid({
                     <div>
                       <span className="text-amber-400 font-semibold text-sm">
                         {product.variants.length === 1
-                          ? formatRupeesShort(product.variants[0].price)
-                          : `from ${formatRupeesShort(Math.min(...product.variants.map((v) => v.price)))}`}
+                          ? formatRupeesShort(product.variants[0].pricePaisa)
+                          : `from ${formatRupeesShort(Math.min(...product.variants.map((v) => v.pricePaisa)))}`}
                       </span>
                       <span className="text-zinc-600 text-xs ml-1.5">
                         {product.variants.length === 1
-                          ? `${product.variants[0].stock} left`
+                          ? `${product.variants[0].stockCount} left`
                           : ''}
                       </span>
                     </div>
@@ -197,7 +203,7 @@ function ProductGrid({
                     <button
                       key={v.id}
                       onClick={() => handleAdd(product, v)}
-                      disabled={v.stock === 0}
+                      disabled={v.stockCount === 0}
                       className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
                     >
                       <div>
@@ -205,11 +211,11 @@ function ProductGrid({
                           {v.size} · {v.color}
                         </span>
                         <span className="text-zinc-500 text-xs ml-2">
-                          {v.stock > 0 ? `${v.stock} left` : 'Out of stock'}
+                          {v.stockCount > 0 ? `${v.stockCount} left` : 'Out of stock'}
                         </span>
                       </div>
                       <span className="text-amber-400 text-xs font-semibold">
-                        {formatRupeesShort(v.price)}
+                        {formatRupeesShort(v.pricePaisa)}
                       </span>
                     </button>
                   ))}
@@ -502,6 +508,7 @@ function UpiQrModal({
   orderRef,
   onBack,
   onPaymentReceived,
+  onSwitchUpi,
   loading,
 }: {
   total: number;
@@ -509,17 +516,24 @@ function UpiQrModal({
   orderRef: string;
   onBack: () => void;
   onPaymentReceived: () => void;
+  onSwitchUpi: (index: number) => Promise<void>;
   loading: boolean;
 }) {
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [switching, setSwitching] = useState(false);
   const amountRupees = (total / 100).toFixed(2);
 
   useEffect(() => {
-    const upiString = `upi://pay?pa=${encodeURIComponent(settings.upiId)}&pn=${encodeURIComponent(settings.upiName)}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(orderRef)}`;
+    const upiString = `upi://pay?pa=${encodeURIComponent(settings.upiId)}&pn=${encodeURIComponent(settings.upiDisplayName)}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(orderRef)}`;
     QRCode.toDataURL(upiString, { width: 280, margin: 2, color: { dark: '#000000', light: '#FFFFFF' } })
       .then(setQrDataUrl)
       .catch(() => {});
   }, [settings, amountRupees, orderRef]);
+
+  async function handleSwitch(i: number) {
+    setSwitching(true);
+    try { await onSwitchUpi(i); } finally { setSwitching(false); }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -551,6 +565,29 @@ function UpiQrModal({
             <p className="text-zinc-500 text-xs">UPI ID</p>
             <p className="text-white text-sm font-mono mt-0.5">{settings.upiId}</p>
           </div>
+
+          {/* UPI slot switcher inside QR modal */}
+          {settings.upiSlots.length > 1 && (
+            <div className="w-full">
+              <p className="text-zinc-600 text-xs mb-1.5 text-center">Switch UPI</p>
+              <div className="flex gap-2 flex-wrap justify-center">
+                {settings.upiSlots.map((slot, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSwitch(i)}
+                    disabled={switching || i === settings.upiActiveIndex}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:cursor-not-allowed ${
+                      i === settings.upiActiveIndex
+                        ? 'bg-amber-500 text-black'
+                        : 'bg-[#2a2a2a] text-zinc-300 hover:bg-[#333]'
+                    }`}
+                  >
+                    {slot.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button
             onClick={onPaymentReceived}
@@ -655,7 +692,13 @@ export default function PosPage() {
   const [discount, setDiscount] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [customer, setCustomer] = useState({ phone: '', name: '', email: '' });
-  const [settings, setSettings] = useState<PosSettings>({ upiId: 'merchant@upi', upiName: 'Reloaded Mens' });
+  const [settings, setSettings] = useState<PosSettings>({
+    upiId: '',
+    upiDisplayName: 'Reloaded Mens',
+    upiSlots: [],
+    upiActiveIndex: 0,
+  });
+  const [upiSwitcherOpen, setUpiSwitcherOpen] = useState(false);
   const [orderResult, setOrderResult] = useState<CreatePosOrderResponse | null>(null);
   const [orderLoading, setOrderLoading] = useState(false);
 
@@ -665,6 +708,13 @@ export default function PosPage() {
   useEffect(() => {
     getPosSettings().then(setSettings).catch(() => {});
   }, []);
+
+  async function handleSwitchUpi(index: number) {
+    await switchUpiActive(index);
+    const updated = await getPosSettings();
+    setSettings(updated);
+    setUpiSwitcherOpen(false);
+  }
 
   function addToCart(item: Omit<CartItem, 'quantity'>) {
     setCart((prev) => {
@@ -760,6 +810,42 @@ export default function PosPage() {
 
       {/* Right: Cart */}
       <div className="w-80 xl:w-96 flex flex-col overflow-hidden bg-[#111]">
+        {/* UPI switcher — only shown when multiple slots are configured */}
+        {settings.upiSlots.length > 1 && (
+          <div className="px-4 pt-3 pb-0 relative">
+            <button
+              onClick={() => setUpiSwitcherOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-3 py-2 bg-[#1a1a1a] border border-[#2a2a2a] hover:border-amber-500/50 rounded-lg text-xs transition-colors"
+            >
+              <span className="text-zinc-500">UPI</span>
+              <span className="text-amber-400 font-mono truncate mx-2 flex-1 text-right">
+                {settings.upiSlots[settings.upiActiveIndex]?.label ?? settings.upiId}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${upiSwitcherOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {upiSwitcherOpen && (
+              <div className="absolute left-4 right-4 top-full mt-1 bg-[#222] border border-[#333] rounded-xl z-30 shadow-xl overflow-hidden">
+                {settings.upiSlots.map((slot, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSwitchUpi(i)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-[#2a2a2a] transition-colors text-left ${
+                      i === settings.upiActiveIndex ? 'bg-amber-500/10' : ''
+                    }`}
+                  >
+                    <div>
+                      <span className="text-white text-xs font-medium">{slot.label}</span>
+                      <span className="text-zinc-500 text-xs ml-2 font-mono">{slot.upiId}</span>
+                    </div>
+                    {i === settings.upiActiveIndex && (
+                      <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <CartPanel
           cart={cart}
           onIncrease={increase}
@@ -784,6 +870,7 @@ export default function PosPage() {
           orderRef={orderRef}
           onBack={() => setModal('customer')}
           onPaymentReceived={handlePaymentReceived}
+          onSwitchUpi={handleSwitchUpi}
           loading={orderLoading}
         />
       )}
