@@ -3,151 +3,160 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 
-// Two-column hero. Left column carries the wordmark + subtitle + CTAs; right
-// column carries two tilted photo cards with scroll-linked parallax.
-//
-// The wordmark intentionally extends past the left column's boundary into
-// the right column's space — text is sized to be wider than the 5fr column
-// at desktop widths, and `whitespace-nowrap` keeps it on one line. With
-// `mix-blend-mode: difference` on white-coloured text the wordmark inverts
-// against its backdrop: appears black on the bone page background, appears
-// white where it crosses over the dark image cards. The transition at the
-// image edges is smooth — no halo or seam.
-//
-// Parallax is direct ref + style.transform writes (no React state) so we
-// don't re-render on every scroll frame. Reduced-motion users get the
-// static composition.
-const HERO_IMAGE_1 = '/hero/hero-1.jpeg';
-const HERO_IMAGE_2 = '/hero/hero-2.jpeg';
+// Editorial High-Fashion Hero Section
+// Inspired by luxury brand lookbooks with giant architectural typography,
+// studio lighting backdrop, and layered model cutout stepping in front of the brand wordmark.
 
 export function Hero() {
-  const card1Ref = React.useRef<HTMLDivElement>(null);
-  const card2Ref = React.useRef<HTMLDivElement>(null);
+  const textRef = React.useRef<HTMLHeadingElement>(null);
+  const modelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced) return;
 
-    const apply = () => {
+    const handleScroll = () => {
       const y = window.scrollY;
-      const c1 = card1Ref.current;
-      const c2 = card2Ref.current;
-      if (c1) c1.style.transform = `rotate(-6deg) translateY(${y * -0.08}px)`;
-      if (c2) c2.style.transform = `rotate(5deg) translateY(${y * 0.12}px)`;
+      // Gentle depth parallax: the text glides slightly slower, model stays grounded
+      if (textRef.current) {
+        textRef.current.style.transform = `translateY(${y * 0.1}px)`;
+      }
+      if (modelRef.current) {
+        modelRef.current.style.transform = `translateY(${y * 0.03}px)`;
+      }
     };
-    apply();
-    window.addEventListener('scroll', apply, { passive: true });
-    return () => window.removeEventListener('scroll', apply);
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   return (
-    // `isolate` creates a stacking context so the mix-blend-mode on the
-    // wordmark only blends against the hero's bg + cards, not whatever the
-    // page above paints. `overflow-hidden` clips the wordmark when it spills
-    // past the right edge of the viewport at narrow screens.
-    <section className="relative isolate overflow-hidden bg-bone">
-      <div className="grid items-center gap-5 px-5 pb-8 pt-5 md:grid-cols-[5fr_7fr] md:gap-10 md:px-8 md:py-12">
-        {/* Left column. min-w-0 stops the wide wordmark from forcing the
-            grid column to grow past its 5fr share — fr units only respect
-            content-min when min-width is auto (the default). */}
-        <div className="flex min-w-0 flex-col justify-center">
-          <span className="label-caps">SS26 · The first drop</span>
-
-          {/* WORDMARK — large enough to extend past its column boundary so
-              its right edge crosses into the image area. z-20 puts it above
-              the cards in the section's stacking context. text-snow +
-              mix-blend-mode: difference inverts the colour against whatever
-              backdrop it crosses, so the type stays legible on both the
-              cream page bg and the darker image cards. */}
-      <div className="relative">
-  {/* Overlay Layer */}
-  <h1
-    className="absolute z-20 mt-3 select-none font-sans font-extrabold uppercase opacity-60"
-    style={{
-      mixBlendMode: 'overlay',
-      fontSize: 'clamp(64px, 13vw, 184px)',
-      whiteSpace: 'nowrap',
-      lineHeight: 0.8,
-      letterSpacing: '-0.08em',
-      WebkitTextStroke: '2px white',
-      color: 'transparent',
-    }}
-  >
-    Reloaded<br />Mens
-  </h1>
-
-  {/* Main Difference Layer */}
-  <h1
-    className="relative z-30 mt-3 select-none font-sans font-extrabold uppercase"
-    style={{
-      mixBlendMode: 'difference',
-      fontSize: 'clamp(64px, 13vw, 184px)',
-      whiteSpace: 'nowrap',
-      lineHeight: 0.8,
-      letterSpacing: '-0.08em',
-      WebkitTextStroke: '1.5px white',
-      color: 'white',
-    }}
-  >
-    Reloaded<br />Mens
-  </h1>
-</div>
-
-          {/* Subtitle + CTAs — stay inside the column (max-w on the paragraph
-              keeps them from running into the image area). z-30 so they sit
-              above the wordmark's mix-blend layer (otherwise the buttons
-              would also get inverted where they overlap). */}
-          <div className="relative z-30">
-            <p className="mt-3.5 max-w-[42ch] text-[14px] leading-[1.5] text-ink-600 md:text-[15px]">
-              Hand-picked menswear in honest fabrics. Made for daily wear, priced
-              without the typical retail markup. Shipped from Delhi NCR.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button asChild size="lg">
-                <Link href="/shop">Shop the drop</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/visit">Visit the store</Link>
-              </Button>
-            </div>
+    <section
+      aria-label="New Season Hero"
+      className="relative isolate w-full overflow-hidden select-none"
+      style={{
+        // Studio lighting: soft radial warmth in center with elegant dropoff to edges
+        background:
+          'radial-gradient(ellipse at 50% 48%, #f7f6f2 0%, #edebe6 55%, #dfded8 100%)',
+      }}
+    >
+      <div className="relative mx-auto flex h-[82vh] min-h-[560px] max-h-[880px] w-full max-w-[1500px] flex-col justify-between p-6 sm:p-8 md:min-h-[640px] md:p-12 lg:min-h-[720px] lg:p-16">
+        {/* ========================================================= */}
+        {/* TOP ROW: Editorial Statement (Top-Left)                   */}
+        {/* ========================================================= */}
+        <div className="relative z-30 flex items-start justify-between">
+          <div className="flex flex-col items-start">
+            <span className="font-sans text-[11px] font-bold uppercase tracking-[0.24em] text-[#121212] leading-[1.4] sm:text-[12px] md:text-[13px]">
+              Fashion
+              <br />
+              That Moves
+              <br />
+              With You.
+            </span>
+            <span className="mt-2 h-[1.5px] w-7 bg-[#121212]" />
           </div>
         </div>
 
-        {/* RIGHT COLUMN — tilted collage.
-            Cards absolute-positioned inside the column; column height comes
-            entirely from `min-h`. See math note in the previous iteration —
-            if you change the card width/aspect, bump min-h to match so the
-            cards don't visually spill below their box. */}
-        <div className="relative min-h-[320px] md:min-h-[480px]">
-          <div
-            ref={card1Ref}
-            className="absolute left-[4%] top-[4%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.35)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
-            style={{ transform: 'rotate(-6deg)' }}
+        {/* ========================================================= */}
+        {/* MIDDLE LAYER: Giant Architectural Typography ("RELOADED MENS") */}
+        {/* ========================================================= */}
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden px-2">
+          <h1
+            ref={textRef}
+            className="w-full text-center font-sans font-black uppercase text-[#141414] whitespace-nowrap transition-transform duration-[40ms] will-change-transform"
+            style={{
+              fontSize: 'clamp(36px, 10.4vw, 168px)',
+              letterSpacing: '-0.04em',
+              lineHeight: 0.85,
+            }}
           >
+            Reloaded Mens
+          </h1>
+        </div>
+
+        {/* ========================================================= */}
+        {/* FOREGROUND LAYER: Walking Model Cutout + Contact Shadows   */}
+        {/* ========================================================= */}
+        <div
+          ref={modelRef}
+          className="pointer-events-none absolute inset-x-0 bottom-0 top-[6%] z-20 mx-auto flex items-end justify-center transition-transform duration-[40ms] will-change-transform md:top-[3%]"
+        >
+          <div className="relative h-[92%] w-full max-w-[440px] sm:max-w-[520px] md:h-[96%] md:max-w-[620px] lg:max-w-[700px] xl:max-w-[760px]">
+            {/* Ambient diffuse studio floor shadow */}
+            <div
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-[100%] bg-black/25 blur-xl"
+              style={{
+                width: 'min(78%, 460px)',
+                height: '32px',
+              }}
+            />
+
+            {/* Back foot contact shadow (left side) */}
+            <div
+              className="absolute bottom-[22px] left-[26%] rounded-[100%] bg-black/45 blur-[4px]"
+              style={{
+                width: '95px',
+                height: '14px',
+                transform: 'rotate(8deg)',
+              }}
+            />
+
+            {/* Front foot contact shadow (right side) */}
+            <div
+              className="absolute bottom-[4px] right-[24%] rounded-[100%] bg-black/55 blur-[3px]"
+              style={{
+                width: '120px',
+                height: '16px',
+                transform: 'rotate(-4deg)',
+              }}
+            />
+
+            {/* Transparent Model Cutout */}
             <Image
-              src={HERO_IMAGE_1}
-              alt=""
+              src="/image.png"
+              alt="Reloaded Menswear Editorial"
               fill
-              sizes="(min-width: 768px) 28vw, 50vw"
-              className="object-cover"
               priority
+              sizes="(min-width: 1280px) 760px, (min-width: 1024px) 700px, (min-width: 768px) 620px, 92vw"
+              className="object-contain object-bottom pointer-events-none select-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)]"
             />
           </div>
-          <div
-            ref={card2Ref}
-            className="absolute right-[2%] top-[14%] aspect-[3/4] w-[46%] origin-center overflow-hidden rounded-md shadow-[0_25px_60px_-20px_rgba(0,0,0,0.4)] ring-1 ring-black/5 transition-transform duration-[60ms] will-change-transform"
-            style={{ transform: 'rotate(5deg)' }}
-          >
-            <Image
-              src={HERO_IMAGE_2}
-              alt=""
-              fill
-              sizes="(min-width: 768px) 28vw, 50vw"
-              className="object-cover"
-              priority
-            />
+        </div>
+
+        {/* ========================================================= */}
+        {/* BOTTOM ROW: CTAs (Left) + Collection Year (Right)          */}
+        {/* ========================================================= */}
+        <div className="relative z-30 flex items-end justify-between gap-4">
+          {/* Bottom-Left: Shop Now + Explore New In */}
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:gap-7">
+            <Link
+              href="/shop"
+              className="inline-flex items-center justify-center bg-[#0e0e0e] px-6 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm transition-all duration-200 hover:bg-neutral-800 hover:shadow-md active:scale-95 sm:px-8 sm:py-3.5 md:text-[12px]"
+            >
+              Shop Now
+            </Link>
+
+            <Link
+              href="/shop?sort=new"
+              className="group inline-flex items-center text-[11px] font-bold uppercase tracking-[0.2em] text-[#0e0e0e] transition-colors hover:text-neutral-600 sm:text-[12px]"
+            >
+              <span className="border-b-[1.5px] border-[#0e0e0e] pb-0.5 transition-all group-hover:border-neutral-500">
+                Explore New In
+              </span>
+            </Link>
+          </div>
+
+          {/* Bottom-Right: New Collection 2026 */}
+          <div className="hidden flex-col items-start sm:flex">
+            <span className="font-sans text-[11px] font-bold uppercase tracking-[0.24em] text-[#121212] leading-[1.4] md:text-[12px]">
+              New
+              <br />
+              Collection
+              <br />
+              2026
+            </span>
+            <span className="mt-2 h-[1.5px] w-7 bg-[#121212]" />
           </div>
         </div>
       </div>

@@ -1,11 +1,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Sparkles, RotateCcw, MessageCircle } from 'lucide-react';
 import { ProductCard, type ProductCardData } from '@/components/product/product-card';
 import { Marquee } from '@/components/marquee';
 import { publicApi } from '@/lib/api';
 import { env } from '@/lib/env';
 import { Hero } from './hero';
+// Preserved legacy hero (tilted cards + blend mode) available for quick swap:
+// import { HeroLegacy } from './hero-legacy';
 import { Testimonials } from './testimonials';
 
 // Editorial marquee — purely decorative, sits between sections like a brand
@@ -43,69 +45,69 @@ export default async function HomePage() {
     categoriesRes.ok && categoriesRes.body ? categoriesRes.body.items.slice(0, 4) : [];
 
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
+    <div className="w-full">
       <Hero />
 
-      {/* Featured categories */}
-      {categories.length > 0 ? (
-        <section className="px-5 pb-12 md:px-8 md:pb-16">
-          <div className="mb-4 flex items-end justify-between">
-            <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
-              Shop by category
-            </h2>
-            <Link
-              href="/shop"
-              className="hidden items-center gap-1 text-[13px] text-ink-700 hover:text-ink-900 md:inline-flex"
-            >
-              Browse all <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/c/${c.slug}`}
-                className="group relative aspect-square overflow-hidden rounded-md bg-ink-100"
-              >
-                {c.imageUrl ? (
-                  <Image
-                    src={c.imageUrl}
-                    alt={c.name}
-                    fill
-                    // 2 cols on mobile (≈50vw), 4 cols on md+ (≈25vw). Lets
-                    // Next pick a sensibly-sized candidate from the optimizer.
-                    sizes="(min-width: 768px) 25vw, 50vw"
-                    className="object-cover transition duration-300 group-hover:scale-[1.02]"
-                  />
-                ) : null}
-                {/* Bottom-anchored gradient so the white name pill stays
-                    readable over bright or busy photos. Sits between the
-                    image and the pill in the stacking order. */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent" />
-                <div className="absolute inset-0 grid place-items-end p-3">
-                  <span className="rounded-full bg-snow/85 px-2.5 py-1 text-[12px] font-medium text-ink-900 backdrop-blur-sm">
-                    {c.name}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Editorial marquee — brand signature between sections. Slow scroll,
-          full-bleed top and bottom hairline. Decorative only — no announce,
-          so screen readers skip it (the phrases also appear in the trust strip
-          + footer copy where AT can read them statically). */}
+      {/* Full-width editorial marquee — black background with crisp white typography */}
       <Marquee
         items={BRAND_PHRASES.map((p) => (
-          <span className="font-display italic">{p}</span>
+          <span key={p} className="font-display italic tracking-wide">
+            {p}
+          </span>
         ))}
-        speed={48}
-        className="my-6 border-y border-ink-100 py-4 text-[18px] text-ink-700 md:my-10 md:py-5 md:text-[22px]"
+        speed={42}
+        className="w-full border-y border-neutral-800 bg-[#0a0a0a] py-3.5 text-[16px] text-white md:py-4.5 md:text-[20px]"
       />
 
-      {/* New in rail */}
+      <div className="mx-auto w-full max-w-[1400px]">
+        {/* Featured categories */}
+        {categories.length > 0 ? (
+          <section className="px-5 py-10 md:px-8 md:pb-16 md:pt-12">
+            <div className="mb-4 flex items-end justify-between">
+              <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[34px]">
+                Shop by category
+              </h2>
+              <Link
+                href="/shop"
+                className="hidden items-center gap-1 text-[13px] text-ink-700 hover:text-ink-900 md:inline-flex"
+              >
+                Browse all <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
+              {categories.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/c/${c.slug}`}
+                  className="group relative aspect-square overflow-hidden rounded-md bg-ink-100"
+                >
+                  {c.imageUrl ? (
+                    <Image
+                      src={c.imageUrl}
+                      alt={c.name}
+                      fill
+                      // 2 cols on mobile (≈50vw), 4 cols on md+ (≈25vw). Lets
+                      // Next pick a sensibly-sized candidate from the optimizer.
+                      sizes="(min-width: 768px) 25vw, 50vw"
+                      className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                    />
+                  ) : null}
+                  {/* Bottom-anchored gradient so the white name pill stays
+                      readable over bright or busy photos. Sits between the
+                      image and the pill in the stacking order. */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent" />
+                  <div className="absolute inset-0 grid place-items-end p-3">
+                    <span className="rounded-full bg-snow/85 px-2.5 py-1 text-[12px] font-medium text-ink-900 backdrop-blur-sm">
+                      {c.name}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* New in rail */}
       {featured.length > 0 ? (
         <section className="px-5 pb-12 md:px-8 md:pb-16">
           <div className="mb-4 flex items-end justify-between">
@@ -130,23 +132,23 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {/* Social proof — sits between products and the trust strip so the
-          rhythm reads as: see the goods → hear from buyers → see the
-          brand promises → footer. */}
-      <Testimonials />
+      </div>
 
-      {/* Trust strip */}
-      <section className="bg-ink-900 text-snow">
+      {/* Trust strip — full bleed black background placed above customer feedback */}
+      <section className="w-full bg-ink-900 text-snow">
         <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-6 px-5 py-10 md:grid-cols-3 md:px-8 md:py-12">
           <TrustItem
+            icon={Sparkles}
             label="Hand-picked"
             body="We comb menswear for the latest worth owning. Only the pieces that pass our own fit, fabric, and finish test make the shop."
           />
           <TrustItem
+            icon={RotateCcw}
             label="14-day returns"
             body="Try it on at home. If it doesn't fit, send it back at no extra cost."
           />
           <TrustItem
+            icon={MessageCircle}
             label="WhatsApp support"
             body={
               <>
@@ -165,15 +167,35 @@ export default async function HomePage() {
           />
         </div>
       </section>
+
+      {/* Customer feedback / Social proof */}
+      <div className="mx-auto w-full max-w-[1400px] pt-12 md:pt-16">
+        <Testimonials />
+      </div>
     </div>
   );
 }
 
-function TrustItem({ label, body }: { label: string; body: React.ReactNode }) {
+function TrustItem({
+  icon: Icon,
+  label,
+  body,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  body: React.ReactNode;
+}) {
   return (
-    <div>
-      <div className="font-mono text-[10.5px] uppercase tracking-caps text-snow/60">{label}</div>
-      <p className="mt-2 text-[14px] leading-[1.55] text-snow/90">{body}</p>
+    <div className="flex items-start gap-3.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] text-snow ring-1 ring-white/10">
+        <Icon className="h-5 w-5 text-snow/90" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-[10.5px] font-semibold uppercase tracking-caps text-snow/70">
+          {label}
+        </div>
+        <p className="mt-1 text-[13.5px] leading-[1.5] text-snow/90">{body}</p>
+      </div>
     </div>
   );
 }

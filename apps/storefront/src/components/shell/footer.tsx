@@ -43,14 +43,14 @@ const LEGAL_LINKS = [
 export function Footer() {
   const whatsappHref = `https://wa.me/${env.NEXT_PUBLIC_WHATSAPP_NUMBER.replace(/[^0-9]/g, '')}`;
   return (
-    <footer className="mt-16 border-t border-ink-100 bg-bone">
+    <footer className="mt-16 border-t border-white/10 bg-ink-900 text-snow">
       <div className="mx-auto max-w-[1400px] px-5 py-12 md:px-8 md:py-16">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <div className="font-display text-[28px] font-semibold tracking-tight text-ink-900">
+            <div className="font-display text-[28px] font-semibold tracking-tight text-snow">
               {env.NEXT_PUBLIC_BRAND_NAME}.
             </div>
-            <p className="mt-2 max-w-[36ch] text-[13px] leading-[1.6] text-ink-600">
+            <p className="mt-2 max-w-[36ch] text-[13px] leading-[1.6] text-snow/70">
               Menswear made for everyday wear. Hand-picked, honest pricing, shipped from
               Delhi NCR.
             </p>
@@ -63,7 +63,7 @@ export function Footer() {
               <MessageCircle className="h-4 w-4" />
               <span className="text-[13px] font-medium">Talk to a stylist on WhatsApp</span>
             </a>
-            <p className="mt-2 text-[11.5px] text-ink-500">10am–8pm IST</p>
+            <p className="mt-2 text-[11.5px] text-snow/50">10am–8pm IST</p>
 
             {/* Social — Instagram for now; add new platforms inline. The icon
                 + handle row is small enough to fade behind the WhatsApp CTA
@@ -72,7 +72,7 @@ export function Footer() {
               href={INSTAGRAM_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-2 text-[12.5px] text-ink-700 hover:text-ink-900"
+              className="mt-4 inline-flex items-center gap-2 text-[12.5px] text-snow/70 hover:text-snow"
               aria-label={`Follow us on Instagram, ${INSTAGRAM_HANDLE}`}
             >
               <Instagram className="h-4 w-4" />
@@ -83,11 +83,11 @@ export function Footer() {
                 over WhatsApp has a path. Single Phone icon + stacked numbers
                 so it reads as one "Call us" group rather than two separate
                 links competing for attention. `tel:` hrefs use E.164. */}
-            <div className="mt-3 flex items-start gap-2 text-[12.5px] text-ink-700">
+            <div className="mt-3 flex items-start gap-2 text-[12.5px] text-snow/70">
               <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <div className="flex flex-col gap-0.5">
                 {PHONES.map((p) => (
-                  <a key={p.tel} href={`tel:${p.tel}`} className="hover:text-ink-900">
+                  <a key={p.tel} href={`tel:${p.tel}`} className="hover:text-snow">
                     {p.label}
                   </a>
                 ))}
@@ -100,18 +100,18 @@ export function Footer() {
           <FooterColumn label="The fine print" links={LEGAL_LINKS} />
         </div>
 
-        <div className="mt-12 flex flex-col gap-3 border-t border-ink-100 pt-6 text-[11.5px] text-ink-500">
+        <div className="mt-12 flex flex-col gap-3 border-t border-white/10 pt-6 text-[11.5px] text-snow/50">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <span>© {new Date().getFullYear()} {env.NEXT_PUBLIC_BRAND_NAME}. All rights reserved.</span>
-            <span className="font-mono uppercase tracking-caps">Curated in India</span>
+            <span className="font-mono uppercase tracking-caps text-snow/40">Curated in India</span>
           </div>
           {/* Developer credit — small, low-attention. The number is the
               builder's contact, not Reloaded's; tel: link so a tap dials. */}
-          <p className="text-[11px] text-ink-400">
+          <p className="text-[11px] text-snow/40">
             Want a website like this?{' '}
             <a
               href="tel:+919717583895"
-              className="font-mono tracking-wider text-ink-600 underline-offset-4 hover:text-ink-900 hover:underline"
+              className="font-mono tracking-wider text-snow/70 underline-offset-4 hover:text-snow hover:underline"
             >
               +91 97175 83895
             </a>
@@ -131,11 +131,11 @@ function FooterColumn({
 }) {
   return (
     <div>
-      <div className="label-caps mb-3">{label}</div>
-      <ul className="flex flex-col gap-2 text-[13px] text-ink-700">
+      <div className="font-mono text-[10px] uppercase tracking-caps text-snow/40 mb-3">{label}</div>
+      <ul className="flex flex-col gap-2 text-[13px] text-snow/70">
         {links.map((l) => (
           <li key={l.href}>
-            <Link href={l.href} className="hover:text-ink-900">
+            <Link href={l.href} className="hover:text-snow transition-colors">
               {l.label}
             </Link>
           </li>
