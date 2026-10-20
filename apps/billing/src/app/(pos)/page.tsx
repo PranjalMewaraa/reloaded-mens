@@ -24,7 +24,6 @@ import {
   type PosProduct,
   type ProductVariant,
   type PosSettings,
-  type UpiSlot,
   type CreatePosOrderResponse,
 } from './actions';
 
