@@ -75,7 +75,9 @@ jobs:
           context: .
           file: apps/${{ matrix.app }}/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          # amd64 only — the VPS is x86_64, and cross-building arm64 crashes
+          # Prisma's engine generation under QEMU (SIGILL).
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # GHA cache backend — fast incremental builds across runs.
