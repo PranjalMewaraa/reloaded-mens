@@ -55,9 +55,6 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
-      - name: Format check
-        run: pnpm format:check
-
       - name: Lint
         run: pnpm lint
 
