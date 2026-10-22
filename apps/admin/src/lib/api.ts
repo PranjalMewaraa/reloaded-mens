@@ -4,6 +4,13 @@
 import { cookies } from 'next/headers';
 import { API_BASE } from './env';
 
+// Server-side calls use ADMIN_INTERNAL_API_URL when set (e.g. http://api:4000 inside Docker)
+// to avoid hairpin NAT — routing out through the VPS's external IP and back in via Caddy.
+// Non-NEXT_PUBLIC: read at runtime on the server, never baked into the client bundle.
+const SERVER_API_BASE = process.env.ADMIN_INTERNAL_API_URL
+  ? `${process.env.ADMIN_INTERNAL_API_URL}/api/v1`
+  : API_BASE;
+
 export interface ApiResponse<T = unknown> {
   status: number;
   ok: boolean;
@@ -43,7 +50,8 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
     init = multipart ? (body as BodyInit) : JSON.stringify(body);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const base = forwardCookies ? SERVER_API_BASE : API_BASE;
+  const res = await fetch(`${base}${path}`, {
     method,
     headers,
     body: init,

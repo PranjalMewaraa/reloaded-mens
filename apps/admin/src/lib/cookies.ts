@@ -71,7 +71,10 @@ export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
       jar.set({
         name: parsed.name,
         value: '',
-        path: parsed.path,
+        // Must use path='/' — mirrored live cookies are always written with path='/'.
+        // The API's original path (e.g. /api/v1/auth/refresh) doesn't exist on
+        // the admin origin, so a delete targeting that path would be a no-op.
+        path: '/',
         // Match the original Domain so the browser clears the right cookie.
         // Skipping this leaves a zombie cookie on the parent domain.
         domain: parsed.domain,

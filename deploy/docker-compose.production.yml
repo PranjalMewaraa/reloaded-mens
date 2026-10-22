@@ -59,6 +59,11 @@ services:
     image: ghcr.io/${GITHUB_USER}/menswear-admin:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Server-side API calls from the admin container go to api:4000 directly
+      # (internal Docker network) so they don't hairpin through the VPS's external
+      # IP and back in via Caddy — a routing mode many VPS providers don't support.
+      ADMIN_INTERNAL_API_URL: http://api:4000
     networks:
       - web
       - backend
