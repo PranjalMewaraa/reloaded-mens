@@ -104,125 +104,118 @@ function ProductGrid({
   return (
     <div className="flex flex-col h-full">
       {/* Search */}
-      <div className="p-4 border-b border-[#2a2a2a]">
+      <div className="px-4 py-3 border-b border-zinc-200">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products by name, SKU…"
-            className="w-full pl-9 pr-4 py-2.5 bg-[#0f0f0f] border border-[#2a2a2a] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm"
+            placeholder="Search products…"
+            className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-lg text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm"
           />
           {loading && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 animate-spin" />
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 animate-spin" />
           )}
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* Compact list */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {!query.trim() && products.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
-            <Search className="w-10 h-10 mb-3 opacity-40" />
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-400">
+            <Search className="w-8 h-8 mb-2 opacity-40" />
             <p className="text-sm">Search for products to add to cart</p>
           </div>
         )}
         {query.trim() && !loading && products.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-400">
             <p className="text-sm">No products found for &quot;{query}&quot;</p>
           </div>
         )}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-          {products.map((product) => (
-            <div key={product.id} className="relative">
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden hover:border-amber-500/40 transition-colors">
-                {/* Image */}
-                <div className="relative aspect-square bg-[#111]">
-                  {product.imageUrl ? (
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                      sizes="200px"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-zinc-700 text-3xl font-bold">
-                      {product.name.charAt(0)}
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="p-3">
-                  <p className="text-white text-sm font-medium leading-tight truncate">{product.name}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5 truncate">
-                    {product.variants.length === 1
-                      ? `${product.variants[0].size} · ${product.variants[0].color}`
-                      : `${product.variants.length} variants`}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div>
-                      <span className="text-amber-400 font-semibold text-sm">
-                        {product.variants.length === 1
-                          ? formatRupeesShort(product.variants[0].pricePaisa)
-                          : `from ${formatRupeesShort(Math.min(...product.variants.map((v) => v.pricePaisa)))}`}
-                      </span>
-                      <span className="text-zinc-600 text-xs ml-1.5">
-                        {product.variants.length === 1
-                          ? `${product.variants[0].stockCount} left`
-                          : ''}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handlePlusClick(product)}
-                      className="w-8 h-8 bg-amber-500 hover:bg-amber-600 rounded-lg flex items-center justify-center transition-colors"
-                    >
-                      {product.variants.length > 1 ? (
-                        <ChevronDown className="w-4 h-4 text-black" />
-                      ) : (
-                        <Plus className="w-4 h-4 text-black" />
-                      )}
-                    </button>
+        {products.map((product) => (
+          <div key={product.id} className="relative">
+            <div className="flex items-center gap-3 bg-white border border-zinc-200 rounded-xl px-3 py-2.5 hover:border-amber-400/60 transition-colors group">
+              {/* Thumbnail */}
+              <div className="w-10 h-10 relative flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100">
+                {product.imageUrl ? (
+                  <Image
+                    src={product.imageUrl}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                    sizes="40px"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-base font-bold">
+                    {product.name.charAt(0)}
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Variant dropdown */}
-              {variantOpen === product.id && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-[#222] border border-[#333] rounded-xl z-30 shadow-xl overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-[#333]">
-                    <span className="text-xs text-zinc-400 font-medium">Select Variant</span>
-                    <button onClick={() => setVariantOpen(null)}>
-                      <X className="w-3.5 h-3.5 text-zinc-500" />
-                    </button>
-                  </div>
-                  {product.variants.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => handleAdd(product, v)}
-                      disabled={v.stockCount === 0}
-                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
-                    >
-                      <div>
-                        <span className="text-white text-xs font-medium">
-                          {v.size} · {v.color}
-                        </span>
-                        <span className="text-zinc-500 text-xs ml-2">
-                          {v.stockCount > 0 ? `${v.stockCount} left` : 'Out of stock'}
-                        </span>
-                      </div>
-                      <span className="text-amber-400 text-xs font-semibold">
-                        {formatRupeesShort(v.pricePaisa)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-zinc-900 text-sm font-medium leading-tight truncate">{product.name}</p>
+                <p className="text-zinc-500 text-xs mt-0.5 truncate">
+                  {product.variants.length === 1
+                    ? `${product.variants[0].size} · ${product.variants[0].color} · ${product.variants[0].stockCount} left`
+                    : `${product.variants.length} variants`}
+                </p>
+              </div>
+
+              {/* Price + button */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-amber-600 font-semibold text-sm">
+                  {product.variants.length === 1
+                    ? formatRupeesShort(product.variants[0].pricePaisa)
+                    : `from ${formatRupeesShort(Math.min(...product.variants.map((v) => v.pricePaisa)))}`}
+                </span>
+                <button
+                  onClick={() => handlePlusClick(product)}
+                  className="w-7 h-7 bg-amber-500 hover:bg-amber-600 rounded-lg flex items-center justify-center transition-colors flex-shrink-0"
+                >
+                  {product.variants.length > 1 ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-black" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5 text-black" />
+                  )}
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
+
+            {/* Variant dropdown */}
+            {variantOpen === product.id && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-zinc-200 rounded-xl z-30 shadow-lg overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100">
+                  <span className="text-xs text-zinc-500 font-medium">Select Variant</span>
+                  <button onClick={() => setVariantOpen(null)}>
+                    <X className="w-3.5 h-3.5 text-zinc-400" />
+                  </button>
+                </div>
+                {product.variants.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => handleAdd(product, v)}
+                    disabled={v.stockCount === 0}
+                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-left"
+                  >
+                    <div>
+                      <span className="text-zinc-900 text-xs font-medium">
+                        {v.size} · {v.color}
+                      </span>
+                      <span className="text-zinc-400 text-xs ml-2">
+                        {v.stockCount > 0 ? `${v.stockCount} left` : 'Out of stock'}
+                      </span>
+                    </div>
+                    <span className="text-amber-600 text-xs font-semibold">
+                      {formatRupeesShort(v.pricePaisa)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -278,14 +271,14 @@ function CartPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-[#2a2a2a]">
-        <h2 className="text-white font-semibold">Cart {cart.length > 0 && `(${cart.length})`}</h2>
+      <div className="px-4 py-3 border-b border-zinc-200">
+        <h2 className="text-zinc-900 font-semibold">Cart {cart.length > 0 && `(${cart.length})`}</h2>
       </div>
 
       {/* Items */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
         {cart.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+          <div className="flex flex-col items-center justify-center h-48 text-zinc-400">
             <p className="text-sm">Cart is empty</p>
             <p className="text-xs mt-1">Search and add products</p>
           </div>
@@ -293,40 +286,40 @@ function CartPanel({
         {cart.map((item) => (
           <div
             key={item.variantId}
-            className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-3 flex items-center gap-3"
+            className="bg-white border border-zinc-200 rounded-xl p-3 flex items-center gap-3"
           >
             {item.imageUrl && (
-              <div className="w-10 h-10 relative flex-shrink-0 rounded-lg overflow-hidden bg-[#111]">
-                <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" sizes="40px" />
+              <div className="w-9 h-9 relative flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100">
+                <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" sizes="36px" />
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">{item.productName}</p>
+              <p className="text-zinc-900 text-sm font-medium truncate">{item.productName}</p>
               <p className="text-zinc-500 text-xs truncate">{item.variantLabel}</p>
-              <p className="text-amber-400 text-xs font-semibold mt-0.5">
+              <p className="text-amber-600 text-xs font-semibold mt-0.5">
                 {formatRupeesShort(item.pricePaisa)}
               </p>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={() => onDecrease(item.variantId)}
-                className="w-7 h-7 rounded-lg bg-[#2a2a2a] hover:bg-[#333] flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-lg bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center transition-colors"
               >
-                <Minus className="w-3.5 h-3.5 text-white" />
+                <Minus className="w-3.5 h-3.5 text-zinc-700" />
               </button>
-              <span className="text-white text-sm w-6 text-center font-medium">{item.quantity}</span>
+              <span className="text-zinc-900 text-sm w-6 text-center font-medium">{item.quantity}</span>
               <button
                 onClick={() => onIncrease(item.variantId)}
                 disabled={item.quantity >= item.stock}
-                className="w-7 h-7 rounded-lg bg-[#2a2a2a] hover:bg-[#333] disabled:opacity-40 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-lg bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 flex items-center justify-center transition-colors"
               >
-                <Plus className="w-3.5 h-3.5 text-white" />
+                <Plus className="w-3.5 h-3.5 text-zinc-700" />
               </button>
               <button
                 onClick={() => onRemove(item.variantId)}
-                className="w-7 h-7 rounded-lg bg-[#2a2a2a] hover:bg-red-900/60 ml-1 flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-lg bg-zinc-100 hover:bg-red-100 ml-1 flex items-center justify-center transition-colors"
               >
-                <Trash2 className="w-3.5 h-3.5 text-zinc-400" />
+                <Trash2 className="w-3.5 h-3.5 text-zinc-400 hover:text-red-500" />
               </button>
             </div>
           </div>
@@ -335,42 +328,42 @@ function CartPanel({
 
       {/* Totals + Checkout */}
       {cart.length > 0 && (
-        <div className="p-4 border-t border-[#2a2a2a] space-y-3">
+        <div className="p-4 border-t border-zinc-200 space-y-3">
           {/* Coupon */}
           {!appliedCoupon ? (
             <div className="space-y-1.5">
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
                   <input
                     type="text"
                     value={couponInput}
                     onChange={(e) => { setCouponInput(e.target.value); setCouponError(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
                     placeholder="Coupon code"
-                    className="w-full pl-8 pr-3 py-2 bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 text-sm"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-zinc-200 rounded-lg text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 text-sm"
                   />
                 </div>
                 <button
                   onClick={handleApplyCoupon}
                   disabled={couponLoading || !couponInput.trim()}
-                  className="px-3 py-2 bg-[#2a2a2a] hover:bg-[#333] disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+                  className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 text-zinc-700 text-sm rounded-lg transition-colors font-medium"
                 >
                   {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
                 </button>
               </div>
-              {couponError && <p className="text-red-400 text-xs">{couponError}</p>}
+              {couponError && <p className="text-red-500 text-xs">{couponError}</p>}
             </div>
           ) : (
-            <div className="flex items-center justify-between px-3 py-2 bg-green-950/30 border border-green-800/40 rounded-lg">
+            <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-green-300 text-sm font-medium">{appliedCoupon.code}</span>
+                <Tag className="w-3.5 h-3.5 text-green-600" />
+                <span className="text-green-700 text-sm font-medium">{appliedCoupon.code}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-green-400 text-sm">-{formatRupeesShort(appliedCoupon.discountPaisa)}</span>
+                <span className="text-green-600 text-sm">-{formatRupeesShort(appliedCoupon.discountPaisa)}</span>
                 <button onClick={removeCoupon}>
-                  <X className="w-3.5 h-3.5 text-zinc-500 hover:text-red-400" />
+                  <X className="w-3.5 h-3.5 text-zinc-400 hover:text-red-500" />
                 </button>
               </div>
             </div>
@@ -378,26 +371,26 @@ function CartPanel({
 
           {/* Lines */}
           <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between text-zinc-400">
+            <div className="flex justify-between text-zinc-500">
               <span>Subtotal</span>
               <span>{formatRupees(subtotal)}</span>
             </div>
             {discount > 0 && (
-              <div className="flex justify-between text-green-400">
+              <div className="flex justify-between text-green-600">
                 <span>Discount</span>
                 <span>-{formatRupees(discount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-white font-bold text-base pt-1 border-t border-[#2a2a2a]">
+            <div className="flex justify-between text-zinc-900 font-bold text-base pt-1 border-t border-zinc-200">
               <span>Total</span>
-              <span className="text-amber-400 text-lg">{formatRupees(total)}</span>
+              <span className="text-amber-600 text-lg">{formatRupees(total)}</span>
             </div>
           </div>
 
           <button
             onClick={() => onProceed(discount, appliedCoupon?.code ?? '')}
             disabled={cart.length === 0}
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-base rounded-xl transition-colors"
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm rounded-xl transition-colors tracking-wide"
           >
             PROCEED TO BILL
           </button>
@@ -435,24 +428,24 @@ function CustomerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-[#2a2a2a]">
-          <h2 className="text-white font-semibold text-lg">Customer Details</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-200">
+          <h2 className="text-zinc-900 font-semibold text-lg">Customer Details</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div className="text-center mb-2">
-            <p className="text-zinc-400 text-sm">Total amount</p>
-            <p className="text-amber-400 text-3xl font-bold">{formatRupees(total)}</p>
+            <p className="text-zinc-500 text-sm">Total amount</p>
+            <p className="text-amber-600 text-3xl font-bold">{formatRupees(total)}</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-              Phone Number <span className="text-red-400">*</span>
+            <label className="block text-sm font-medium text-zinc-700 mb-1.5">
+              Phone Number <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
@@ -460,36 +453,36 @@ function CustomerModal({
               onChange={(e) => { setPhone(e.target.value); setError(''); }}
               placeholder="+91XXXXXXXXXX"
               required
-              className="w-full px-4 py-3 bg-[#0f0f0f] border border-[#2a2a2a] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
             />
-            {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Name (optional)</label>
+            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Name (optional)</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Customer name"
-              className="w-full px-4 py-3 bg-[#0f0f0f] border border-[#2a2a2a] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Email (optional)</label>
+            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Email (optional)</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="customer@email.com"
-              className="w-full px-4 py-3 bg-[#0f0f0f] border border-[#2a2a2a] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-black font-bold text-base rounded-xl transition-colors"
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm rounded-xl transition-colors tracking-wide"
           >
             GENERATE QR
           </button>
@@ -535,40 +528,40 @@ function UpiQrModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl w-full max-w-sm shadow-2xl">
-        <div className="p-5 border-b border-[#2a2a2a] flex items-center gap-3">
-          <button onClick={onBack} className="text-zinc-400 hover:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="p-5 border-b border-zinc-200 flex items-center gap-3">
+          <button onClick={onBack} className="text-zinc-400 hover:text-zinc-700">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h2 className="text-white font-semibold text-lg">Scan to Pay</h2>
+          <h2 className="text-zinc-900 font-semibold text-lg">Scan to Pay</h2>
         </div>
 
         <div className="p-6 flex flex-col items-center gap-4">
           <div className="text-center">
-            <p className="text-zinc-400 text-sm">Amount</p>
-            <p className="text-amber-400 text-4xl font-bold mt-1">₹{amountRupees}</p>
+            <p className="text-zinc-500 text-sm">Amount</p>
+            <p className="text-amber-600 text-4xl font-bold mt-1">₹{amountRupees}</p>
           </div>
 
           {qrDataUrl ? (
-            <div className="bg-white p-3 rounded-xl">
+            <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-xl">
               <img src={qrDataUrl} alt="UPI QR Code" className="w-56 h-56" />
             </div>
           ) : (
-            <div className="w-64 h-64 bg-[#111] rounded-xl flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-zinc-600 animate-spin" />
+            <div className="w-64 h-64 bg-zinc-100 rounded-xl flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-zinc-400 animate-spin" />
             </div>
           )}
 
           <div className="text-center">
-            <p className="text-zinc-500 text-xs">UPI ID</p>
-            <p className="text-white text-sm font-mono mt-0.5">{settings.upiId}</p>
+            <p className="text-zinc-400 text-xs">UPI ID</p>
+            <p className="text-zinc-700 text-sm font-mono mt-0.5">{settings.upiId}</p>
           </div>
 
           {/* UPI slot switcher inside QR modal */}
           {settings.upiSlots.length > 1 && (
             <div className="w-full">
-              <p className="text-zinc-600 text-xs mb-1.5 text-center">Switch UPI</p>
+              <p className="text-zinc-400 text-xs mb-1.5 text-center">Switch UPI</p>
               <div className="flex gap-2 flex-wrap justify-center">
                 {settings.upiSlots.map((slot, i) => (
                   <button
@@ -578,7 +571,7 @@ function UpiQrModal({
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:cursor-not-allowed ${
                       i === settings.upiActiveIndex
                         ? 'bg-amber-500 text-black'
-                        : 'bg-[#2a2a2a] text-zinc-300 hover:bg-[#333]'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                     }`}
                   >
                     {slot.label}
@@ -591,7 +584,7 @@ function UpiQrModal({
           <button
             onClick={onPaymentReceived}
             disabled={loading}
-            className="w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold text-base rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold text-base rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -634,43 +627,43 @@ function SuccessModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-sm shadow-2xl">
         <div className="p-8 flex flex-col items-center gap-4 text-center">
-          <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center">
-            <CheckCircle2 className="w-10 h-10 text-green-400" />
+          <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8 text-green-600" />
           </div>
 
           <div>
-            <h2 className="text-white text-2xl font-bold">Bill Generated!</h2>
-            <p className="text-zinc-400 text-sm mt-1">Payment confirmed</p>
+            <h2 className="text-zinc-900 text-2xl font-bold">Bill Generated!</h2>
+            <p className="text-zinc-500 text-sm mt-1">Payment confirmed</p>
           </div>
 
-          <div className="w-full bg-[#111] rounded-xl p-4 space-y-2">
+          <div className="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Order</span>
-              <span className="text-white font-mono font-semibold">{result.orderNumber}</span>
+              <span className="text-zinc-900 font-mono font-semibold">{result.orderNumber}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Amount Paid</span>
-              <span className="text-amber-400 font-bold">₹{amountRupees}</span>
+              <span className="text-amber-600 font-bold">₹{amountRupees}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Phone</span>
-              <span className="text-white">{phone}</span>
+              <span className="text-zinc-900">{phone}</span>
             </div>
           </div>
 
           <div className="w-full space-y-2">
             <button
               onClick={openWhatsApp}
-              className="w-full py-3.5 bg-green-700 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               📱 SEND ON WHATSAPP
             </button>
             <button
               onClick={onNewSale}
-              className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               🔄 NEW SALE
             </button>
@@ -803,38 +796,38 @@ export default function PosPage() {
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Left: Products */}
-      <div className="flex-1 flex flex-col border-r border-[#2a2a2a] overflow-hidden">
+      <div className="flex-1 flex flex-col border-r border-zinc-200 overflow-hidden">
         <ProductGrid onAddToCart={addToCart} />
       </div>
 
       {/* Right: Cart */}
-      <div className="w-80 xl:w-96 flex flex-col overflow-hidden bg-[#111]">
+      <div className="w-80 xl:w-96 flex flex-col overflow-hidden bg-zinc-50">
         {/* UPI switcher — only shown when multiple slots are configured */}
         {settings.upiSlots.length > 1 && (
           <div className="px-4 pt-3 pb-0 relative">
             <button
               onClick={() => setUpiSwitcherOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-3 py-2 bg-[#1a1a1a] border border-[#2a2a2a] hover:border-amber-500/50 rounded-lg text-xs transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 bg-white border border-zinc-200 hover:border-amber-400/60 rounded-lg text-xs transition-colors"
             >
-              <span className="text-zinc-500">UPI</span>
-              <span className="text-amber-400 font-mono truncate mx-2 flex-1 text-right">
+              <span className="text-zinc-400">UPI</span>
+              <span className="text-amber-600 font-mono truncate mx-2 flex-1 text-right">
                 {settings.upiSlots[settings.upiActiveIndex]?.label ?? settings.upiId}
               </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${upiSwitcherOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 shrink-0 transition-transform ${upiSwitcherOpen ? 'rotate-180' : ''}`} />
             </button>
             {upiSwitcherOpen && (
-              <div className="absolute left-4 right-4 top-full mt-1 bg-[#222] border border-[#333] rounded-xl z-30 shadow-xl overflow-hidden">
+              <div className="absolute left-4 right-4 top-full mt-1 bg-white border border-zinc-200 rounded-xl z-30 shadow-lg overflow-hidden">
                 {settings.upiSlots.map((slot, i) => (
                   <button
                     key={i}
                     onClick={() => handleSwitchUpi(i)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-[#2a2a2a] transition-colors text-left ${
-                      i === settings.upiActiveIndex ? 'bg-amber-500/10' : ''
+                    className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-zinc-50 transition-colors text-left ${
+                      i === settings.upiActiveIndex ? 'bg-amber-50' : ''
                     }`}
                   >
                     <div>
-                      <span className="text-white text-xs font-medium">{slot.label}</span>
-                      <span className="text-zinc-500 text-xs ml-2 font-mono">{slot.upiId}</span>
+                      <span className="text-zinc-900 text-xs font-medium">{slot.label}</span>
+                      <span className="text-zinc-400 text-xs ml-2 font-mono">{slot.upiId}</span>
                     </div>
                     {i === settings.upiActiveIndex && (
                       <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" />

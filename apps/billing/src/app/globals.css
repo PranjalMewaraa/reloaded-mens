@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --background: #0f0f0f;
-  --surface: #1a1a1a;
-  --surface-hover: #222222;
-  --border: #2a2a2a;
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --accent: #F59E0B;
-  --accent-hover: #D97706;
+  --background: #F4F4F5;
+  --surface: #ffffff;
+  --surface-hover: #F4F4F5;
+  --border: #E4E4E7;
+  --text-primary: #0A0A0A;
+  --text-secondary: #71717A;
+  --accent: #D97706;
+  --accent-hover: #B45309;
 }
 
 * {
@@ -18,28 +18,27 @@
 }
 
 body {
-  background-color: #0f0f0f;
-  color: #ffffff;
+  background-color: #F4F4F5;
+  color: #0A0A0A;
   font-family: system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
 }
 
-/* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #F4F4F5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #444444;
+  background: #D4D4D8;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: #A1A1AA;
 }
