@@ -234,7 +234,12 @@ function CategorySheet({ mode, flat, onClose, onSaved }: CategorySheetProps) {
       seoTitle: seoTitle.trim() ? seoTitle : null,
       seoDescription: seoDescription.trim() ? seoDescription : null,
       isActive,
-      sortOrder: 0,
+      // Assign the next available sortOrder so new siblings don't all get 0
+      // (which causes non-deterministic ordering).
+      sortOrder:
+        mode.kind === 'create'
+          ? flat.filter((n) => n.parentId === (parentId || null)).length
+          : mode.node.sortOrder,
     };
     startTransition(async () => {
       const result =

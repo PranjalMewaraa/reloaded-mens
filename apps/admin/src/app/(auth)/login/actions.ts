@@ -22,7 +22,6 @@ export async function loginAction(input: {
     method: 'POST',
     body: parsed.data,
   });
-  await mirrorSetCookies(res.setCookies);
 
   if (res.status === 401) {
     return { ok: false, error: 'Invalid email or password' };
@@ -30,6 +29,10 @@ export async function loginAction(input: {
   if (!res.ok || !res.body) {
     return { ok: false, error: 'Login failed. Please try again.' };
   }
+
+  // Mirror cookies only on success — a failed login must not write stale
+  // cookies that could interfere with a subsequent successful attempt.
+  await mirrorSetCookies(res.setCookies);
 
   if (res.body.stage === AUTH_STAGE.COMPLETE) {
     return { ok: true, nextStage: 'complete' };

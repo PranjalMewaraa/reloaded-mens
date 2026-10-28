@@ -43,19 +43,27 @@ export async function bulkSetActiveAction(
   ids: string[],
   isActive: boolean,
 ): Promise<ActionResult> {
+  const failed: string[] = [];
   for (const id of ids) {
     const res = await api(`/products/${id}`, { method: 'PATCH', body: { isActive } });
-    if (!res.ok) return { ok: false, error: describeError(res.body) };
+    if (!res.ok) failed.push(id);
   }
   revalidatePath('/products');
+  if (failed.length > 0) {
+    return { ok: false, error: `${failed.length} of ${ids.length} product(s) could not be updated` };
+  }
   return { ok: true };
 }
 
 export async function bulkDeleteAction(ids: string[]): Promise<ActionResult> {
+  const failed: string[] = [];
   for (const id of ids) {
     const res = await api(`/products/${id}`, { method: 'DELETE' });
-    if (!res.ok) return { ok: false, error: describeError(res.body) };
+    if (!res.ok) failed.push(id);
   }
   revalidatePath('/products');
+  if (failed.length > 0) {
+    return { ok: false, error: `${failed.length} of ${ids.length} product(s) could not be deleted` };
+  }
   return { ok: true };
 }

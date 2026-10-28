@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +11,6 @@ import { loginAction, totpVerifyAction } from './actions';
 type Step = 'credentials' | 'totp';
 
 export function LoginForm({ next }: { next?: string }) {
-  const router = useRouter();
   const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,13 +35,17 @@ export function LoginForm({ next }: { next?: string }) {
         return;
       }
       if (result.nextStage === 'complete') {
-        // TOTP bypassed via ADMIN_TOTP_REQUIRED=false — session already issued, go straight in.
+        // Hard navigation (not router.replace) so the browser drops the
+        // in-memory router cache and re-issues the request with the freshly
+        // issued cookies. router.replace can reuse a cached RSC payload that
+        // was rendered when the user was unauthenticated, causing the layout
+        // to redirect back to /login — the very loop we're trying to avoid.
         toast.success('Signed in');
-        router.replace(next && next.startsWith('/') ? next : '/dashboard');
+        window.location.assign(next && next.startsWith('/') ? next : '/dashboard');
         return;
       }
       if (result.nextStage === 'totp_enrollment') {
-        router.push(next ? `/totp/enroll?next=${encodeURIComponent(next)}` : '/totp/enroll');
+        window.location.assign(next ? `/totp/enroll?next=${encodeURIComponent(next)}` : '/totp/enroll');
         return;
       }
       setStep('totp');
@@ -61,7 +63,7 @@ export function LoginForm({ next }: { next?: string }) {
         return;
       }
       toast.success('Signed in');
-      router.replace(next && next.startsWith('/') ? next : '/dashboard');
+      window.location.assign(next && next.startsWith('/') ? next : '/dashboard');
     });
   }
 

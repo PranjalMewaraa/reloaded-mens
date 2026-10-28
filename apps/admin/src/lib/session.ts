@@ -12,8 +12,14 @@ export interface AdminSessionUser {
 // Returns the current admin user if authenticated, else null.
 // Calls /auth/me with cookies forwarded; treats 401 as "not authenticated".
 export async function getCurrentUser(): Promise<AdminSessionUser | null> {
-  const res = await api<AdminSessionUser>('/auth/me');
-  if (res.status === 401 || res.status === 403) return null;
-  if (!res.ok || !res.body) return null;
-  return res.body;
+  try {
+    const res = await api<AdminSessionUser>('/auth/me');
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok || !res.body) return null;
+    return res.body;
+  } catch {
+    // Network error (e.g. Docker internal DNS failure) — treat as unauthenticated
+    // rather than crashing the layout with a 500.
+    return null;
+  }
 }

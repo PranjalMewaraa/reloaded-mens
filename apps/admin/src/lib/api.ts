@@ -51,13 +51,26 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
   }
 
   const base = forwardCookies ? SERVER_API_BASE : API_BASE;
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers,
-    body: init,
-    cache: 'no-store',
-    redirect: 'manual',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method,
+      headers,
+      body: init,
+      cache: 'no-store',
+      redirect: 'manual',
+    });
+  } catch {
+    // Network error (Docker DNS failure, connection refused, etc.).
+    // Return a synthetic 503 so every caller that checks !res.ok handles it
+    // uniformly instead of crashing with an unhandled rejection.
+    return {
+      status: 0,
+      ok: false,
+      body: { message: 'Network error — could not reach the server' } as unknown as T,
+      setCookies: [],
+    };
+  }
 
   // Node's fetch exposes Set-Cookie via getSetCookie() (undici).
   const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;

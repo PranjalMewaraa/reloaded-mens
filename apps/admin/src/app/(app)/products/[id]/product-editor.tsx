@@ -74,6 +74,9 @@ export function ProductEditor({ product, categoriesTree }: ProductEditorProps) {
   const [autoStatus, setAutoStatus] = React.useState<SaveStatus>('idle');
   const [lastSavedAt, setLastSavedAt] = React.useState<number | null>(null);
   const autosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented each time a manual save starts so in-flight autosaves can
+  // detect they are stale and skip applying their result.
+  const saveGenRef = React.useRef(0);
   // Track which fields have been edited locally so a router.refresh() that
   // re-hydrates `product` doesn't blow away an in-flight edit.
   const localChangesRef = React.useRef<Set<keyof EditorProduct>>(new Set());
@@ -161,7 +164,7 @@ export function ProductEditor({ product, categoriesTree }: ProductEditorProps) {
   // -------- Autosave loop --------
 
   const runAutosave = React.useCallback(
-    async (target: EditorProduct, basis: EditorProduct) => {
+    async (target: EditorProduct, basis: EditorProduct, gen: number) => {
       // Compute diff against the basis (last-known pristine) and PATCH.
       // Skip categories — those go through the SaveBar PUT path.
       const productChanges = buildProductDiff(target, basis);
@@ -170,21 +173,27 @@ export function ProductEditor({ product, categoriesTree }: ProductEditorProps) {
         return;
       }
       setAutoStatus('saving');
-      const result = await updateProductAction(target.id, productChanges);
-      if (!result.ok) {
-        setAutoStatus('error');
-        return;
+      try {
+        const result = await updateProductAction(target.id, productChanges);
+        // Discard result if a manual save started after this autosave fired.
+        if (saveGenRef.current !== gen) return;
+        if (!result.ok) {
+          setAutoStatus('error');
+          return;
+        }
+        // Roll forward pristine for the fields we just committed so subsequent
+        // diffs don't include them.
+        setPristine((prev) => mergeProductChanges(prev, productChanges, target));
+        // Drop the just-committed fields from localChangesRef so a later
+        // server refresh can claim them again.
+        Object.keys(productChanges).forEach((k) =>
+          localChangesRef.current.delete(k as keyof EditorProduct),
+        );
+        setLastSavedAt(Date.now());
+        setAutoStatus('saved');
+      } catch {
+        if (saveGenRef.current === gen) setAutoStatus('error');
       }
-      // Roll forward pristine for the fields we just committed so subsequent
-      // diffs don't include them.
-      setPristine((prev) => mergeProductChanges(prev, productChanges, target));
-      // Drop the just-committed fields from localChangesRef so a later
-      // server refresh can claim them again.
-      Object.keys(productChanges).forEach((k) =>
-        localChangesRef.current.delete(k as keyof EditorProduct),
-      );
-      setLastSavedAt(Date.now());
-      setAutoStatus('saved');
     },
     [],
   );
@@ -197,8 +206,9 @@ export function ProductEditor({ product, categoriesTree }: ProductEditorProps) {
     }
     setAutoStatus('pending');
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    const gen = saveGenRef.current;
     autosaveTimerRef.current = setTimeout(() => {
-      void runAutosave(draft, pristine);
+      void runAutosave(draft, pristine, gen);
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
@@ -214,11 +224,13 @@ export function ProductEditor({ product, categoriesTree }: ProductEditorProps) {
   }
 
   async function handleSave() {
-    // Cancel any pending autosave so we don't double-fire.
+    // Cancel any pending autosave timer and bump the generation counter so
+    // any in-flight autosave discards its result rather than overwriting ours.
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
+    saveGenRef.current += 1;
     setSaving(true);
     setAutoStatus('saving');
     try {
