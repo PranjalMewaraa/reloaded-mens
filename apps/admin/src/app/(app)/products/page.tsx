@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shell/page-header';
@@ -75,11 +75,18 @@ export default async function ProductsPage({ searchParams }: PageProps) {
         title="Products"
         description={`${data.total} product${data.total === 1 ? '' : 's'} in catalogue.`}
         actions={
-          <Button asChild>
-            <Link href="/products/new">
-              <Plus className="mr-1.5 h-4 w-4" /> New product
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <a href={`/api/export/products${qs ? `?${qs}` : ''}`} download>
+                <Download className="mr-1.5 h-4 w-4" /> Export
+              </a>
+            </Button>
+            <Button asChild>
+              <Link href="/products/new">
+                <Plus className="mr-1.5 h-4 w-4" /> New product
+              </Link>
+            </Button>
+          </div>
         }
       />
       <div className="px-5 py-5 md:px-8 md:py-6">
