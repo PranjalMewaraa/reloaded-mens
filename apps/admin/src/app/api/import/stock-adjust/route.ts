@@ -83,7 +83,7 @@ function cellNum(cell: ExcelJS.Cell): number | null {
 function buildHeaderMap(row: ExcelJS.Row): Map<string, number> {
   const m = new Map<string, number>();
   row.eachCell({ includeEmpty: false }, (cell, colNum) => {
-    const name = String(cell.value ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+    const name = String(cell.value ?? '').trim().toLowerCase().replace(/\s+/g, '_').replace(/_?\*$/, '');
     if (name) m.set(name, colNum);
   });
   return m;

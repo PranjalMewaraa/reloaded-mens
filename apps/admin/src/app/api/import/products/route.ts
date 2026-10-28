@@ -131,7 +131,7 @@ const SKU_RE = /^[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 function buildHeaderMap(row: ExcelJS.Row): Map<string, number> {
   const m = new Map<string, number>();
   row.eachCell({ includeEmpty: false }, (cell, colNum) => {
-    const name = String(cell.value ?? '').trim().toLowerCase();
+    const name = String(cell.value ?? '').trim().toLowerCase().replace(/\s*\*$/, '');
     if (name) m.set(name, colNum);
   });
   return m;
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
   const seenProductSlugs = new Set<string>();
 
   ws1.eachRow({ includeEmpty: false }, (row, ri) => {
-    if (ri === 1) return; // header
+    if (ri <= 2) return; // row 1 = header, row 2 = optional notes row
 
     const rawName = cellStr(row.getCell(col1('name'))).trim();
     const rawSlug = cellStr(row.getCell(col1('slug'))).trim();
