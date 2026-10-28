@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
   const variantBySku = await fetchAllVariants();
 
   const h = buildHeaderMap(ws.getRow(1));
-  const col = (name: string) => h.get(name) ?? -1;
+  const col = (name: string) => h.get(name) ?? 9999;
 
   const rows: AdjustRow[] = [];
 

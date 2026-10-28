@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
   const ws2 = wb.getWorksheet('Variants');
   if (ws2) {
     const h2 = buildHeaderMap(ws2.getRow(1));
-    const col2 = (name: string) => h2.get(name) ?? -1;
+    const col2 = (name: string) => h2.get(name) ?? 9999;
 
     ws2.eachRow({ includeEmpty: false }, (row, ri) => {
       if (ri === 1) return; // header
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
   }
 
   const h1 = buildHeaderMap(ws1.getRow(1));
-  const col1 = (name: string) => h1.get(name) ?? -1;
+  const col1 = (name: string) => h1.get(name) ?? 9999;
 
   const rows: ParsedRow[] = [];
   const unknownCatSlugs = new Set<string>();
