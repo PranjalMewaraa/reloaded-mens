@@ -11,7 +11,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Minus, Package, Plus, Search } from 'lucide-react';
+import { Loader2, Minus, Package, Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { InventorySort, InventoryStockFilter } from '@repo/types';
 import { BarcodeScanButton } from '@/components/ui/barcode-scan-button';
@@ -24,6 +24,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AdjustDrawer } from './adjust-drawer';
+import { StockAdjustImportPanel } from './stock-adjust-import-panel';
 import { loadMoreInventoryAction, quickAdjustStockAction } from './actions';
 
 export interface InventoryListItem {
@@ -87,6 +88,7 @@ export function InventoryList({
   const stockFilter = initialStockFilter;
   const sort = initialSort;
   const [adjusting, setAdjusting] = React.useState<InventoryListItem | null>(null);
+  const [importOpen, setImportOpen] = React.useState(false);
 
   // Optimistic overlay — variantId → local stockCount the operator just tapped.
   // Cleared when the server refresh confirms (router.refresh → initial prop
@@ -359,6 +361,9 @@ export function InventoryList({
             />
           </div>
           <BarcodeScanButton onDetected={(value) => setQuery(value)} className="h-12 w-12" />
+          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-12 shrink-0">
+            <Upload className="mr-1.5 h-4 w-4" /> Import
+          </Button>
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -489,6 +494,14 @@ export function InventoryList({
         onClose={() => setAdjusting(null)}
         onSaved={() => {
           setAdjusting(null);
+          router.refresh();
+        }}
+      />
+      <StockAdjustImportPanel
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => {
+          setImportOpen(false);
           router.refresh();
         }}
       />
