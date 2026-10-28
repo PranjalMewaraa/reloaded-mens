@@ -36,7 +36,7 @@ const config: NextConfig = {
   // explicitly from the builder's pnpm store into the runner image (the
   // tracer has been known to skip .node files even with this config).
   // https://pris.ly/d/engine-not-found-nextjs
-  serverExternalPackages: ['@prisma/client', '.prisma/client', 'exceljs'],
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
   outputFileTracingIncludes: {
     '/**/*': [
       './node_modules/.prisma/client/**/*',
