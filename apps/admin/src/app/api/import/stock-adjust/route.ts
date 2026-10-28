@@ -123,9 +123,11 @@ export async function POST(request: NextRequest) {
   }
 
   const arrayBuffer = await (file as File).arrayBuffer();
+  const buffer = Buffer.from(new Uint8Array(arrayBuffer));
   const wb = new ExcelJS.Workbook();
   try {
-    await wb.xlsx.load(arrayBuffer);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(buffer as any);
   } catch {
     return NextResponse.json(
       { error: 'Could not parse file — make sure it is a valid .xlsx' },
