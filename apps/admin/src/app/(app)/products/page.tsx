@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shell/page-header';
 import { ProductsList, type ProductListItem } from './products-list';
+import type { FlatCategory } from './bulk-edit-panel';
 
 export const metadata = { title: 'Products' };
 
@@ -14,6 +15,14 @@ interface ProductsListResponse {
   total: number;
 }
 
+interface CategoryTreeItem {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  children: CategoryTreeItem[];
+}
+
 interface PageProps {
   searchParams?: Promise<{
     page?: string;
@@ -21,6 +30,18 @@ interface PageProps {
     q?: string;
     isActive?: string;
   }>;
+}
+
+function flattenCategories(nodes: CategoryTreeItem[]): FlatCategory[] {
+  const out: FlatCategory[] = [];
+  function walk(list: CategoryTreeItem[]) {
+    for (const n of list) {
+      out.push({ id: n.id, name: n.name, slug: n.slug, parentId: n.parentId });
+      walk(n.children);
+    }
+  }
+  walk(nodes);
+  return out;
 }
 
 // Server Component — reads filters out of the URL and forwards them to the API. All
@@ -34,8 +55,18 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   if (sp.q) query.set('q', sp.q);
   if (sp.isActive) query.set('isActive', sp.isActive);
   const qs = query.toString();
-  const res = await api<ProductsListResponse>(`/products${qs ? `?${qs}` : ''}`);
-  const data = res.ok && res.body ? res.body : { items: [], page: 1, limit: 20, total: 0 };
+
+  const [productsRes, categoriesRes] = await Promise.all([
+    api<ProductsListResponse>(`/products${qs ? `?${qs}` : ''}`),
+    api<{ items: CategoryTreeItem[] }>('/categories'),
+  ]);
+
+  const data = productsRes.ok && productsRes.body
+    ? productsRes.body
+    : { items: [], page: 1, limit: 20, total: 0 };
+  const categories = categoriesRes.ok && categoriesRes.body
+    ? flattenCategories(categoriesRes.body.items)
+    : [];
 
   return (
     <div className="mx-auto w-full max-w-[1280px]">
@@ -59,6 +90,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           total={data.total}
           initialQuery={sp.q ?? ''}
           initialIsActive={sp.isActive ?? ''}
+          categories={categories}
         />
       </div>
     </div>

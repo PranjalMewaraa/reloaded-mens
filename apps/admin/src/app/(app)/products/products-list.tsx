@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { bulkDeleteAction, bulkSetActiveAction } from './actions';
+import { BulkEditPanel, type FlatCategory } from './bulk-edit-panel';
 
 export interface ProductListItem {
   id: string;
@@ -33,6 +34,7 @@ interface ProductsListProps {
   total: number;
   initialQuery: string;
   initialIsActive: string;
+  categories: FlatCategory[];
 }
 
 export function ProductsList({
@@ -42,12 +44,14 @@ export function ProductsList({
   total,
   initialQuery,
   initialIsActive,
+  categories,
 }: ProductsListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = React.useState(initialQuery);
   const [isActive, setIsActive] = React.useState(initialIsActive);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
   // Debounce the search input → URL params update → server refetch.
@@ -253,6 +257,11 @@ export function ProductsList({
         onClear={() => setSelected(new Set())}
         actions={[
           {
+            label: 'Edit',
+            onClick: () => setBulkEditOpen(true),
+            disabled: pending,
+          },
+          {
             label: 'Activate',
             onClick: () =>
               runBulk(() => bulkSetActiveAction(Array.from(selected), true), 'Activated'),
@@ -278,6 +287,17 @@ export function ProductsList({
             disabled: pending,
           },
         ]}
+      />
+      <BulkEditPanel
+        open={bulkEditOpen}
+        selectedIds={Array.from(selected)}
+        categories={categories}
+        onClose={() => setBulkEditOpen(false)}
+        onDone={() => {
+          setBulkEditOpen(false);
+          setSelected(new Set());
+          router.refresh();
+        }}
       />
     </>
   );

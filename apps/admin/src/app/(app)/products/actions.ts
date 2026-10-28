@@ -5,6 +5,7 @@ import {
   createProductSchema,
   type CreateProductInput,
 } from '@repo/types';
+import { z } from 'zod';
 import { api } from '@/lib/api';
 
 export interface ActionResult<T = void> {
@@ -64,6 +65,50 @@ export async function bulkDeleteAction(ids: string[]): Promise<ActionResult> {
   revalidatePath('/products');
   if (failed.length > 0) {
     return { ok: false, error: `${failed.length} of ${ids.length} product(s) could not be deleted` };
+  }
+  return { ok: true };
+}
+
+const bulkEditSchema = z.object({
+  ids: z.array(z.string()).min(1),
+  patch: z.object({
+    availabilityFlag: z.enum(['online_shippable', 'in_store_only', 'both']).optional(),
+    gstRatePercent: z.number().int().min(0).max(50).optional(),
+    isActive: z.boolean().optional(),
+    categoryIds: z.array(z.string()).optional(),
+  }),
+});
+
+export type BulkEditInput = z.infer<typeof bulkEditSchema>;
+
+export async function bulkEditAction(input: BulkEditInput): Promise<ActionResult> {
+  const parsed = bulkEditSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') };
+  }
+  const { ids, patch } = parsed.data;
+  const { categoryIds, ...productPatch } = patch;
+  const failed: string[] = [];
+
+  for (const id of ids) {
+    // Apply scalar field changes (availability, gst, isActive) in one PATCH.
+    if (Object.keys(productPatch).length > 0) {
+      const res = await api(`/products/${id}`, { method: 'PATCH', body: productPatch });
+      if (!res.ok) { failed.push(id); continue; }
+    }
+    // Replace category assignments if caller provided them.
+    if (categoryIds !== undefined) {
+      const res = await api(`/products/${id}/categories`, {
+        method: 'PUT',
+        body: { categoryIds },
+      });
+      if (!res.ok) failed.push(id);
+    }
+  }
+
+  revalidatePath('/products');
+  if (failed.length > 0) {
+    return { ok: false, error: `${failed.length} of ${ids.length} product(s) could not be updated` };
   }
   return { ok: true };
 }
