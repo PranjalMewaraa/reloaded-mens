@@ -5,13 +5,16 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Box, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { Upload } from 'lucide-react';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
+import { Button } from '@/components/ui/button';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { bulkDeleteAction, bulkSetActiveAction } from './actions';
 import { BulkEditPanel, type FlatCategory } from './bulk-edit-panel';
+import { ImportPanel } from './import-panel';
 
 export interface ProductListItem {
   id: string;
@@ -52,6 +55,7 @@ export function ProductsList({
   const [isActive, setIsActive] = React.useState(initialIsActive);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
   // Debounce the search input → URL params update → server refetch.
@@ -190,6 +194,9 @@ export function ProductsList({
           <option value="true">Active only</option>
           <option value="false">Inactive only</option>
         </select>
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-12 shrink-0">
+          <Upload className="mr-1.5 h-4 w-4" /> Import
+        </Button>
       </div>
       <DataTable<ProductListItem>
         rows={initial}
@@ -296,6 +303,14 @@ export function ProductsList({
         onDone={() => {
           setBulkEditOpen(false);
           setSelected(new Set());
+          router.refresh();
+        }}
+      />
+      <ImportPanel
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => {
+          setImportOpen(false);
           router.refresh();
         }}
       />
