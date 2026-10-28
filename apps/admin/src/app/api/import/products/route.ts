@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { api } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -156,14 +160,17 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(new Uint8Array(arrayBuffer));
 
   const wb = new ExcelJS.Workbook();
+  const tmpPath = join(tmpdir(), `import-products-${randomUUID()}.xlsx`);
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await wb.xlsx.load(buffer as any);
+    await writeFile(tmpPath, buffer);
+    await wb.xlsx.readFile(tmpPath);
   } catch (e) {
     return NextResponse.json(
       { error: `Could not parse file — make sure it is a valid .xlsx (${e instanceof Error ? e.message : String(e)})` },
       { status: 400 },
     );
+  } finally {
+    await unlink(tmpPath).catch(() => {});
   }
 
   // Fetch category tree for slug → id resolution
