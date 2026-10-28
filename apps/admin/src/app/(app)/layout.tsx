@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/session';
+
+// All pages under (app) are authenticated and hit the database — opt out of
+// static prerendering so Next.js never tries to render them at build time
+// (DATABASE_URL is not available in the build environment).
+export const dynamic = 'force-dynamic';
 import { BottomNav } from '@/components/shell/bottom-nav';
 import { Sidebar } from '@/components/shell/sidebar';
 import { TopBar } from '@/components/shell/top-bar';
