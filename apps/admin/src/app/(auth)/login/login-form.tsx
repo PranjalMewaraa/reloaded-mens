@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { loginAction, totpVerifyAction } from './actions';
 
 type Step = 'credentials' | 'totp';
 
@@ -28,18 +27,26 @@ export function LoginForm({ next }: { next?: string }) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await loginAction({ email, password });
+      let result: { ok: boolean; nextStage?: string; error?: string };
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        result = await res.json();
+      } catch {
+        setError('Network error — please try again.');
+        toast.error('Network error — please try again.');
+        return;
+      }
       if (!result.ok) {
-        setError(result.error);
-        toast.error(result.error);
+        const msg = result.error ?? 'Login failed';
+        setError(msg);
+        toast.error(msg);
         return;
       }
       if (result.nextStage === 'complete') {
-        // Hard navigation (not router.replace) so the browser drops the
-        // in-memory router cache and re-issues the request with the freshly
-        // issued cookies. router.replace can reuse a cached RSC payload that
-        // was rendered when the user was unauthenticated, causing the layout
-        // to redirect back to /login — the very loop we're trying to avoid.
         toast.success('Signed in');
         window.location.assign(next && next.startsWith('/') ? next : '/dashboard');
         return;
@@ -56,10 +63,23 @@ export function LoginForm({ next }: { next?: string }) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await totpVerifyAction({ code });
+      let result: { ok: boolean; error?: string };
+      try {
+        const res = await fetch('/api/auth/totp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        result = await res.json();
+      } catch {
+        setError('Network error — please try again.');
+        toast.error('Network error — please try again.');
+        return;
+      }
       if (!result.ok) {
-        setError(result.error);
-        toast.error(result.error);
+        const msg = result.error ?? 'Verification failed';
+        setError(msg);
+        toast.error(msg);
         return;
       }
       toast.success('Signed in');

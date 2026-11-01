@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 // Public paths: /login, /totp/*, /_next/*, /favicon, public assets.
 // Everything else requires an access_token cookie or a stage_token (mid-flow).
 
-const PUBLIC_PATHS = ['/login', '/totp', '/favicon.ico', '/robots.txt'];
+const PUBLIC_PATHS = ['/login', '/totp', '/api/auth', '/favicon.ico', '/robots.txt'];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
