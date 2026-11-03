@@ -132,6 +132,8 @@ export function ImportPanel({ open, onClose, onDone }: ImportPanelProps) {
         errors.push({ name: p.name, error: res.error ?? 'Unknown error' });
       }
       setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
+      // Brief pause between creates to avoid hitting the API rate limiter.
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
     setResult({ created, failed: errors.length, errors });
