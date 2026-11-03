@@ -12,7 +12,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { createProductAction } from './actions';
 import type { ParseResponse, ParsedRow } from '@/app/api/import/products/route';
 
 interface ImportPanelProps {
@@ -97,39 +96,55 @@ export function ImportPanel({ open, onClose, onDone }: ImportPanelProps) {
 
     for (const row of validRows) {
       const p = row.product!;
-      const res = await createProductAction({
-        slug: p.slug,
-        name: p.name,
-        description: p.description || undefined,
-        hsnCode: p.hsnCode || undefined,
-        gstRatePercent: p.gstRatePercent ?? undefined,
-        availabilityFlag: p.availabilityFlag,
-        basePricePaisa: p.basePricePaisa,
-        compareAtPricePaisa: p.compareAtPricePaisa ?? undefined,
-        costPricePaisa: p.costPricePaisa ?? undefined,
-        isActive: p.isActive,
-        isReturnable: p.isReturnable,
-        seoTitle: p.seoTitle || undefined,
-        seoDescription: p.seoDescription || undefined,
-        categoryIds: p.categoryIds.length > 0 ? p.categoryIds : undefined,
-        variants: p.variants.length > 0
-          ? p.variants.map((v) => ({
-              sku: v.sku,
-              size: v.size || undefined,
-              color: v.color || undefined,
-              stockCount: v.stock,
-              lowStockThreshold: v.lowStockThreshold,
-              priceOverridePaisa: v.priceOverridePaisa ?? undefined,
-              barcode: v.barcode || undefined,
-              isActive: v.isActive,
-            }))
-          : undefined,
-      });
+      let ok = false;
+      let errorMsg = 'Unknown error';
+      try {
+        const resp = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: p.slug,
+            name: p.name,
+            description: p.description || undefined,
+            hsnCode: p.hsnCode || undefined,
+            gstRatePercent: p.gstRatePercent ?? undefined,
+            availabilityFlag: p.availabilityFlag,
+            basePricePaisa: p.basePricePaisa,
+            compareAtPricePaisa: p.compareAtPricePaisa ?? undefined,
+            costPricePaisa: p.costPricePaisa ?? undefined,
+            isActive: p.isActive,
+            isReturnable: p.isReturnable,
+            seoTitle: p.seoTitle || undefined,
+            seoDescription: p.seoDescription || undefined,
+            categoryIds: p.categoryIds.length > 0 ? p.categoryIds : undefined,
+            variants: p.variants.length > 0
+              ? p.variants.map((v) => ({
+                  sku: v.sku,
+                  size: v.size || undefined,
+                  color: v.color || undefined,
+                  stockCount: v.stock,
+                  lowStockThreshold: v.lowStockThreshold,
+                  priceOverridePaisa: v.priceOverridePaisa ?? undefined,
+                  barcode: v.barcode || undefined,
+                  isActive: v.isActive,
+                }))
+              : undefined,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok && (data as { ok?: boolean }).ok) {
+          ok = true;
+        } else {
+          errorMsg = (data as { error?: string }).error ?? 'Request failed';
+        }
+      } catch {
+        errorMsg = 'Network error';
+      }
 
-      if (res.ok) {
+      if (ok) {
         created++;
       } else {
-        errors.push({ name: p.name, error: res.error ?? 'Unknown error' });
+        errors.push({ name: p.name, error: errorMsg });
       }
       setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
       // Pause between creates to avoid hitting the API rate limiter.
