@@ -11,7 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { z } from 'zod';
 import {
   ADMIN_ROLE,
   createProductSchema,
@@ -28,6 +28,11 @@ import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
 import { ProductsService } from './products.service.js';
+
+const bulkCreateProductsSchema = z.object({
+  products: z.array(createProductSchema).min(1).max(200),
+});
+type BulkCreateProductsInput = z.infer<typeof bulkCreateProductsSchema>;
 
 @Controller('products')
 @UseGuards(JwtAccessGuard, RolesGuard)
@@ -47,9 +52,15 @@ export class ProductsController {
 
   @Post()
   @HttpCode(201)
-  @SkipThrottle()
   async create(@Body(new ZodValidationPipe(createProductSchema)) body: CreateProductInput) {
     return this.products.create(body);
+  }
+
+  // One request per import batch instead of one per product.
+  @Post('bulk')
+  @HttpCode(200)
+  async bulkCreate(@Body(new ZodValidationPipe(bulkCreateProductsSchema)) body: BulkCreateProductsInput) {
+    return this.products.bulkCreate(body.products);
   }
 
   @Patch(':id')

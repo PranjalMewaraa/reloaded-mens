@@ -87,13 +87,15 @@ export class ProductsService {
     };
   }
 
-  async create(input: CreateProductInput) {
+  // replaceExisting: bulk import re-uploads overwrite an active product with the same slug.
+  async create(input: CreateProductInput, opts: { replaceExisting?: boolean } = {}) {
     const clash = await prisma.product.findFirst({ where: { slug: input.slug } });
     if (clash) {
-      // Hard-delete any prior product with this slug (active or soft-deleted) so
-      // the DB unique constraint doesn't block re-creation. Variants cascade via
-      // the schema's onDelete:Cascade. Callers that need conflict protection (e.g.
-      // the manual product form) validate slug uniqueness before reaching here.
+      if (clash.deletedAt === null && !opts.replaceExisting) {
+        throw new ConflictException(`Slug "${input.slug}" already exists`);
+      }
+      // Hard-delete so the DB unique constraint (which also covers soft-deleted
+      // rows) doesn't block re-creation. Variants cascade.
       await prisma.product.delete({ where: { id: clash.id } });
     }
 
@@ -178,6 +180,26 @@ export class ProductsService {
     });
   }
 
+  // Sequential so slug/SKU pre-checks see earlier rows; one failure doesn't abort the batch.
+  async bulkCreate(inputs: CreateProductInput[]) {
+    const results: Array<
+      { slug: string; name: string; ok: true; id: string } | { slug: string; name: string; ok: false; error: string }
+    > = [];
+    for (const input of inputs) {
+      try {
+        const product = await this.create(input, { replaceExisting: true });
+        results.push({ slug: input.slug, name: input.name, ok: true, id: product.id });
+      } catch (e) {
+        results.push({ slug: input.slug, name: input.name, ok: false, error: describeError(e) });
+      }
+    }
+    return {
+      created: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
+  }
+
   async update(id: string, input: UpdateProductInput) {
     await this.ensureExists(id);
     if (input.slug) {
@@ -255,6 +277,14 @@ export class ProductsService {
     });
     if (!exists) throw new NotFoundException(`Product ${id} not found`);
   }
+}
+
+function describeError(e: unknown): string {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+    return `Duplicate value for ${String((e.meta as { target?: unknown } | undefined)?.target ?? 'unique field')}`;
+  }
+  if (e instanceof ConflictException || e instanceof NotFoundException) return e.message;
+  return e instanceof Error ? e.message : 'Unknown error';
 }
 
 function extractPrimaryImageUrl(images: Prisma.JsonValue): string | null {

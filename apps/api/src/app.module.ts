@@ -45,9 +45,12 @@ ConfigModule.forRoot({
 // trip up legitimate browsing, and a `strict` tier is opted into via
 // @Throttle({ strict: ... }) on auth + OTP + coupon validation routes
 // where abuse cost is high. Names must match the keys used in @Throttle.
+// In @nestjs/throttler v5+ every named tier applies to EVERY route, so the
+// strict tier's module-level limit is effectively unlimited; routes get the
+// real strict limit only via their own @Throttle({ strict: { limit, ttl } }).
 ThrottlerModule.forRoot([
-  { name: 'default', ttl: 60_000, limit: 120 }, // 120 req/min/IP — comfortable browsing
-  { name: 'strict', ttl: 60_000, limit: 10 },   // 10 req/min/IP — auth, OTP, coupon checks
+  { name: 'default', ttl: 60_000, limit: 120 },
+  { name: 'strict', ttl: 60_000, limit: Number.MAX_SAFE_INTEGER },
 ]),
     // Public file serving for LocalStorageProvider. Mounted at /files (outside the
     // /api/v1 global prefix — see main.ts setGlobalPrefix exclude).

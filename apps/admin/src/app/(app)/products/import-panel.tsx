@@ -13,6 +13,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import type { ParseResponse, ParsedRow } from '@/app/api/import/products/route';
+import type { BulkCreateResult } from '@/app/api/products/bulk/route';
 
 interface ImportPanelProps {
   open: boolean;
@@ -94,61 +95,59 @@ export function ImportPanel({ open, onClose, onDone }: ImportPanelProps) {
     const errors: ImportResult['errors'] = [];
     let created = 0;
 
-    for (const row of validRows) {
-      const p = row.product!;
-      let ok = false;
-      let errorMsg = 'Unknown error';
+    const payloads = validRows.map(({ product: p }) => ({
+      slug: p!.slug,
+      name: p!.name,
+      description: p!.description || undefined,
+      hsnCode: p!.hsnCode || undefined,
+      gstRatePercent: p!.gstRatePercent ?? undefined,
+      availabilityFlag: p!.availabilityFlag,
+      basePricePaisa: p!.basePricePaisa,
+      compareAtPricePaisa: p!.compareAtPricePaisa ?? undefined,
+      costPricePaisa: p!.costPricePaisa ?? undefined,
+      isActive: p!.isActive,
+      isReturnable: p!.isReturnable,
+      seoTitle: p!.seoTitle || undefined,
+      seoDescription: p!.seoDescription || undefined,
+      categoryIds: p!.categoryIds.length > 0 ? p!.categoryIds : undefined,
+      variants: p!.variants.length > 0
+        ? p!.variants.map((v) => ({
+            sku: v.sku,
+            size: v.size || undefined,
+            color: v.color || undefined,
+            stockCount: v.stock,
+            lowStockThreshold: v.lowStockThreshold,
+            priceOverridePaisa: v.priceOverridePaisa ?? undefined,
+            barcode: v.barcode || undefined,
+            isActive: v.isActive,
+          }))
+        : undefined,
+    }));
+
+    // Batches keep each request well under proxy timeouts while still being one call per 25 products.
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < payloads.length; i += BATCH_SIZE) {
+      const batch = payloads.slice(i, i + BATCH_SIZE);
       try {
-        const resp = await fetch('/api/products', {
+        const resp = await fetch('/api/products/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slug: p.slug,
-            name: p.name,
-            description: p.description || undefined,
-            hsnCode: p.hsnCode || undefined,
-            gstRatePercent: p.gstRatePercent ?? undefined,
-            availabilityFlag: p.availabilityFlag,
-            basePricePaisa: p.basePricePaisa,
-            compareAtPricePaisa: p.compareAtPricePaisa ?? undefined,
-            costPricePaisa: p.costPricePaisa ?? undefined,
-            isActive: p.isActive,
-            isReturnable: p.isReturnable,
-            seoTitle: p.seoTitle || undefined,
-            seoDescription: p.seoDescription || undefined,
-            categoryIds: p.categoryIds.length > 0 ? p.categoryIds : undefined,
-            variants: p.variants.length > 0
-              ? p.variants.map((v) => ({
-                  sku: v.sku,
-                  size: v.size || undefined,
-                  color: v.color || undefined,
-                  stockCount: v.stock,
-                  lowStockThreshold: v.lowStockThreshold,
-                  priceOverridePaisa: v.priceOverridePaisa ?? undefined,
-                  barcode: v.barcode || undefined,
-                  isActive: v.isActive,
-                }))
-              : undefined,
-          }),
+          body: JSON.stringify({ products: batch }),
         });
-        const data = await resp.json().catch(() => ({}));
-        if (resp.ok && (data as { ok?: boolean }).ok) {
-          ok = true;
+        const data = (await resp.json().catch(() => ({}))) as Partial<BulkCreateResult> & { error?: string };
+        if (resp.ok && data.results) {
+          for (const r of data.results) {
+            if (r.ok) created++;
+            else errors.push({ name: r.name, error: r.error ?? 'Unknown error' });
+          }
         } else {
-          errorMsg = (data as { error?: string }).error ?? 'Request failed';
+          const msg = data.error ?? `Request failed (HTTP ${resp.status})`;
+          for (const p of batch) errors.push({ name: p.name, error: msg });
         }
       } catch {
-        errorMsg = 'Network error';
+        for (const p of batch) errors.push({ name: p.name, error: 'Network error' });
       }
-
-      if (ok) {
-        created++;
-      } else {
-        errors.push({ name: p.name, error: errorMsg });
-      }
-      setProgress((prev) => ({ ...prev, done: prev.done + 1 }));
-      // Pause between creates to avoid hitting the API rate limiter.
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      setProgress((prev) => ({ ...prev, done: Math.min(prev.done + batch.length, prev.total) }));
     }
 
     setResult({ created, failed: errors.length, errors });

@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default async function LoginPage({ searchParams }: Props) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser().catch(() => null);
   const sp = await searchParams;
   if (user) {
     redirect(sp.next && sp.next.startsWith('/') ? sp.next : '/dashboard');
