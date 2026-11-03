@@ -88,7 +88,7 @@ export class ProductsService {
   }
 
   async create(input: CreateProductInput) {
-    const clash = await prisma.product.findUnique({ where: { slug: input.slug } });
+    const clash = await prisma.product.findFirst({ where: { slug: input.slug, deletedAt: null } });
     if (clash) throw new ConflictException(`Slug "${input.slug}" already exists`);
 
     // SKU uniqueness is global — pre-check before opening the tx so the error
@@ -176,7 +176,7 @@ export class ProductsService {
     await this.ensureExists(id);
     if (input.slug) {
       const clash = await prisma.product.findFirst({
-        where: { slug: input.slug, NOT: { id } },
+        where: { slug: input.slug, deletedAt: null, NOT: { id } },
       });
       if (clash) throw new ConflictException(`Slug "${input.slug}" already exists`);
     }

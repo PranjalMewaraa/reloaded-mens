@@ -179,20 +179,6 @@ export async function POST(request: NextRequest) {
     ? flattenCatTree(catRes.body.items)
     : new Map<string, string>();
 
-  // Fetch all existing product slugs so we can flag duplicates in the preview.
-  const existingSlugs = new Set<string>();
-  {
-    let page = 1;
-    while (true) {
-      const r = await api<{ items: Array<{ slug: string }>; total: number }>(
-        `/products?limit=100&page=${page}`,
-      );
-      if (!r.ok || !r.body || r.body.items.length === 0) break;
-      for (const p of r.body.items) existingSlugs.add(p.slug);
-      if (existingSlugs.size >= r.body.total) break;
-      page++;
-    }
-  }
 
   // ── Parse Variants sheet first → group by product_slug ──────────────────────
   const variantsBySlug = new Map<string, ParsedVariant[]>();
@@ -266,10 +252,6 @@ export async function POST(request: NextRequest) {
     }
     if (slug) seenProductSlugs.add(slug);
 
-    // Slug already exists in the catalogue
-    if (slug && existingSlugs.has(slug)) {
-      errors.push(`Slug "${slug}" already exists in the catalogue — delete the existing product first or change the name`);
-    }
 
     // Availability
     const rawAvail = cellStr(row.getCell(col1('availability'))).trim().toLowerCase();
