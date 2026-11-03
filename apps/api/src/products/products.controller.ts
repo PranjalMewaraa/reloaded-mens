@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   ADMIN_ROLE,
   createProductSchema,
@@ -46,6 +47,7 @@ export class ProductsController {
 
   @Post()
   @HttpCode(201)
+  @SkipThrottle()
   async create(@Body(new ZodValidationPipe(createProductSchema)) body: CreateProductInput) {
     return this.products.create(body);
   }
