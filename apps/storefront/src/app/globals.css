@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Font CSS variables — defined here so build-time Google Fonts fetching is not required.
+   Fonts are loaded at runtime via the <link> tag in layout.tsx. */
+:root {
+  --font-jakarta: 'Plus Jakarta Sans';
+  --font-jetbrains: 'JetBrains Mono';
+  --font-fraunces: 'Fraunces';
+}
+
 /*
  * MOOL storefront tokens — customer-facing variant of the same scale used in the admin.
  * Mapped through shadcn CSS variables so any shadcn-style primitive we copy over Just Works.

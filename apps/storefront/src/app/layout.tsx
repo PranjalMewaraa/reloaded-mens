@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans, JetBrains_Mono, Fraunces } from 'next/font/google';
 import './globals.css';
 import { StoreShell } from '@/components/shell/store-shell';
 import { publicApi } from '@/lib/api';
@@ -12,22 +11,10 @@ interface CategoryTreeNode {
   name: string;
 }
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-jakarta',
-  weight: ['400', '500', '600', '700'],
-});
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains',
-  weight: ['400', '500'],
-});
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  variable: '--font-fraunces',
-  weight: ['400', '500', '600'],
-  style: ['normal', 'italic'],
-});
+// Google Fonts loaded via <link> at runtime (not next/font/google) to avoid
+// build-time network dependency that fails in CI environments.
+const GOOGLE_FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&display=swap';
 
 export const metadata: Metadata = {
   title: {
@@ -55,10 +42,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       : [];
 
   return (
-    <html
-      lang="en"
-      className={`${jakarta.variable} ${jetbrains.variable} ${fraunces.variable}`}
-    >
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
+      </head>
       <body className="font-sans">
         <StoreShell navCategories={navCategories} initialCustomer={customer}>
           {children}
