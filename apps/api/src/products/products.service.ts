@@ -88,8 +88,15 @@ export class ProductsService {
   }
 
   async create(input: CreateProductInput) {
-    const clash = await prisma.product.findFirst({ where: { slug: input.slug, deletedAt: null } });
-    if (clash) throw new ConflictException(`Slug "${input.slug}" already exists`);
+    const clash = await prisma.product.findFirst({ where: { slug: input.slug } });
+    if (clash) {
+      if (clash.deletedAt === null) {
+        throw new ConflictException(`Slug "${input.slug}" already exists`);
+      }
+      // Slug belongs to a soft-deleted product — hard-delete it so the DB
+      // unique constraint doesn't block the re-create below.
+      await prisma.product.delete({ where: { id: clash.id } });
+    }
 
     // SKU uniqueness is global — pre-check before opening the tx so the error
     // surfaces cleanly to the caller (CSV import uses this).
