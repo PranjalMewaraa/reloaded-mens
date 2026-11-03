@@ -90,11 +90,10 @@ export class ProductsService {
   async create(input: CreateProductInput) {
     const clash = await prisma.product.findFirst({ where: { slug: input.slug } });
     if (clash) {
-      if (clash.deletedAt === null) {
-        throw new ConflictException(`Slug "${input.slug}" already exists`);
-      }
-      // Slug belongs to a soft-deleted product — hard-delete it so the DB
-      // unique constraint doesn't block the re-create below.
+      // Hard-delete any prior product with this slug (active or soft-deleted) so
+      // the DB unique constraint doesn't block re-creation. Variants cascade via
+      // the schema's onDelete:Cascade. Callers that need conflict protection (e.g.
+      // the manual product form) validate slug uniqueness before reaching here.
       await prisma.product.delete({ where: { id: clash.id } });
     }
 
