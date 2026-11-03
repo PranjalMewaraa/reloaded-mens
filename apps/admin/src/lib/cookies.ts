@@ -1,10 +1,15 @@
-// Mirror Set-Cookie strings from the API onto the Next.js response cookie jar.
-// Why: the admin acts as a BFF — cookies issued by api.yourbrand.com would not be
-// reachable by Server Components, so we re-issue them on the admin's own origin.
+// Mirror Set-Cookie strings from the API onto the admin's own origin.
+// Why: the admin acts as a BFF — cookies issued by api.reloadedmens.in would not be
+// reachable by Next.js Server Components, so we re-issue them on the admin origin.
+//
+// Two variants:
+//   mirrorCookiesToResponse — for Route Handlers (set on NextResponse directly)
+//   mirrorSetCookies        — for Server Actions (use cookies() from next/headers)
 
+import type { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-interface ParsedCookie {
+export interface ParsedCookie {
   name: string;
   value: string;
   path?: string;
@@ -59,45 +64,60 @@ function parseSetCookie(header: string): ParsedCookie | null {
   return out;
 }
 
-export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
-  if (setCookies.length === 0) return;
-  const jar = await cookies();
+// Set mirrored cookies directly on a NextResponse — the only reliable way in
+// Route Handlers (cookies().set() only flushes in Server Actions).
+export function mirrorCookiesToResponse(setCookies: string[], response: NextResponse): void {
   for (const raw of setCookies) {
     const parsed = parseSetCookie(raw);
     if (!parsed) continue;
 
-    // A cleared cookie has Max-Age=0 (or in the past). Honor it by deleting.
+    // A cleared cookie has Max-Age=0 (or expires in the past). Delete it.
     if (parsed.maxAge === 0 || (parsed.expires && parsed.expires.getTime() < Date.now())) {
-      jar.set({
+      response.cookies.set({
         name: parsed.name,
         value: '',
-        // Must use path='/' — mirrored live cookies are always written with path='/'.
-        // The API's original path (e.g. /api/v1/auth/refresh) doesn't exist on
-        // the admin origin, so a delete targeting that path would be a no-op.
         path: '/',
-        // Match the original Domain so the browser clears the right cookie.
-        // Skipping this leaves a zombie cookie on the parent domain.
         domain: parsed.domain,
         maxAge: 0,
       });
       continue;
     }
 
+    response.cookies.set({
+      name: parsed.name,
+      value: parsed.value,
+      // Always path='/' — API paths like /api/v1/auth/refresh don't exist on
+      // the admin origin, so the browser would never send the cookie otherwise.
+      path: '/',
+      // Drop the domain so the cookie is host-only for admin.reloadedmens.in.
+      // Forwarding the API's domain (.reloadedmens.in) can silently fail if
+      // the browser treats a cross-subdomain Set-Cookie as a security violation.
+      domain: undefined,
+      maxAge: parsed.maxAge,
+      expires: parsed.expires,
+      httpOnly: parsed.httpOnly,
+      secure: parsed.secure,
+      sameSite: parsed.sameSite,
+    });
+  }
+}
+
+// For Server Actions — cookies().set() works there but NOT in Route Handlers.
+export async function mirrorSetCookies(setCookies: string[]): Promise<void> {
+  if (setCookies.length === 0) return;
+  const jar = await cookies();
+  for (const raw of setCookies) {
+    const parsed = parseSetCookie(raw);
+    if (!parsed) continue;
+    if (parsed.maxAge === 0 || (parsed.expires && parsed.expires.getTime() < Date.now())) {
+      jar.set({ name: parsed.name, value: '', path: '/', domain: parsed.domain, maxAge: 0 });
+      continue;
+    }
     jar.set({
       name: parsed.name,
       value: parsed.value,
-      // Use '/' so the browser sends the cookie on every admin-app path.
-      // The API sets stage_token with path='/api/v1/auth' (scoped to its own
-      // routes), but mirrored onto the admin origin those API paths never exist,
-      // so the browser would never include the cookie in requests to /totp/enroll
-      // or any other admin page.
       path: '/',
-      // Forward Domain (e.g. `.reloadedmens.in`) so the same cookie is valid
-      // on every subdomain — required for client-side fetches from
-      // admin.reloadedmens.in to api.reloadedmens.in to carry credentials.
-      // Without this the mirrored cookie is host-only on admin.* and api.*
-      // calls arrive without auth.
-      domain: parsed.domain,
+      domain: undefined,
       maxAge: parsed.maxAge,
       expires: parsed.expires,
       httpOnly: parsed.httpOnly,

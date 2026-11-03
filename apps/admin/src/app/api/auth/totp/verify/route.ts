@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { totpVerifyRequestSchema } from '@repo/types';
 import { api } from '@/lib/api';
-import { mirrorSetCookies } from '@/lib/cookies';
+import { mirrorCookiesToResponse } from '@/lib/cookies';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,8 +26,6 @@ export async function POST(request: NextRequest) {
     body: parsed.data,
   });
 
-  await mirrorSetCookies(res.setCookies);
-
   if (res.status === 401) {
     return NextResponse.json({ ok: false, error: 'Invalid code' }, { status: 401 });
   }
@@ -35,5 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Verification failed. Please try again.' }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  mirrorCookiesToResponse(res.setCookies, response);
+  return response;
 }
