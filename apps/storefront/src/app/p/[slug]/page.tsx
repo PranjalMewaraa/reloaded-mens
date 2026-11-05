@@ -99,8 +99,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
           <h2 className="font-display text-[24px] font-semibold tracking-tight text-ink-900 md:text-[30px]">
             You might also like
           </h2>
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
-            {related.slice(0, 4).map((p) => (
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5 xl:grid-cols-6">
+            {related.slice(0, 6).map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>

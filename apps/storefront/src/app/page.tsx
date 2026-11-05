@@ -124,7 +124,7 @@ export default async function HomePage() {
               See all
             </Link>
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5 xl:grid-cols-6">
             {featured.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

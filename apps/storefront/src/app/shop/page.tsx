@@ -73,7 +73,7 @@ export default async function ShopIndexPage({ searchParams }: PageProps) {
           />
         </div>
       ) : (
-        <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5 xl:grid-cols-6">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}

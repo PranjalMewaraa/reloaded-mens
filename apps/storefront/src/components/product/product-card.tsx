@@ -31,7 +31,10 @@ interface ProductCardProps {
 // MOOL product card per design system §"product card":
 // - 3:4 portrait image, badge top-left, sold-out overlay when applicable
 // - Title (13px font-medium), color count / fabric subtitle, price + MRP strikethrough
-export function ProductCard({ product, sizes = '(min-width:768px) 25vw, 50vw' }: ProductCardProps) {
+export function ProductCard({
+  product,
+  sizes = '(min-width:1280px) 17vw, (min-width:1024px) 20vw, (min-width:768px) 33vw, 50vw',
+}: ProductCardProps) {
   const discountPct =
     product.compareAtPricePaisa && product.compareAtPricePaisa > product.basePricePaisa
       ? Math.round(
